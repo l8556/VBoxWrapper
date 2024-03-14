@@ -6,8 +6,7 @@ class FileUtils:
 
     def __init__(self, vm_id: str, username: str,  password: str):
         self.name = vm_id
-        self.username = username
-        self.password = password
+        self._auth_cmd = f"--username {username} --password {password}"
 
     def mkdir(self, path: str) -> None:
         self._cmd.run(
@@ -28,7 +27,3 @@ class FileUtils:
         self._cmd.run(
             f"{self._cmd.guestcontrol} {self.name} run {self._auth_cmd} --wait-stdout -- /bin/bash -c '{command}'"
         )
-
-    @property
-    def _auth_cmd(self) -> str:
-        return f"--username {self.username} --password {self.password}"

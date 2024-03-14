@@ -2,10 +2,10 @@
 from os.path import basename
 
 from . import VirtualMachine
+from .VMExceptions import VboxException
 from .commands import Commands as cmd
 from subprocess import getoutput
 
-class VboxException(Exception): ...
 
 class Vbox:
 

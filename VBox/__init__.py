@@ -1,3 +1,4 @@
 # -*- coding: utf-8 -*-
-from VBox.VirtualMachine.virtualmachine import VirtualMachine, VirtualMachinException
-from .VBox import Vbox, VboxException
+from .VirtualMachine import VirtualMachine, FileUtils
+from .VBox import Vbox
+from .VMExceptions import VboxException, VirtualMachinException

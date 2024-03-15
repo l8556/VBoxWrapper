@@ -35,16 +35,16 @@ class Commands:
     enumerate: str = f"{vboxmanage} guestproperty enumerate"
     guestcontrol: str = f"{vboxmanage} guestcontrol"
 
-    @staticmethod
-    def run(command: str):
-        call(command, shell=True)
+    # @staticmethod
+    # def run(command: str):
+    #     call(command, shell=True)
 
     @staticmethod
     def get_output(command: str) -> str:
         return getoutput(command)
 
     @staticmethod
-    def run_command(command: str) -> CompletedProcess:
+    def run(command: str) -> CompletedProcess:
         try:
             result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
             result.check_returncode()  # Raises a CalledProcessError if return code is non-zero

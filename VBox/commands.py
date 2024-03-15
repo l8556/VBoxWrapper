@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from subprocess import call, getoutput
+from subprocess import getoutput, CalledProcessError, run as sb_run
 from functools import wraps
 
-import subprocess
 from subprocess import CompletedProcess
 from .VMExceptions import VirtualMachinException
 
@@ -35,19 +34,17 @@ class Commands:
     enumerate: str = f"{vboxmanage} guestproperty enumerate"
     guestcontrol: str = f"{vboxmanage} guestcontrol"
 
-    # @staticmethod
-    # def run(command: str):
-    #     call(command, shell=True)
-
     @staticmethod
     def get_output(command: str) -> str:
         return getoutput(command)
 
     @staticmethod
-    def run(command: str) -> CompletedProcess:
+    def run(command: str,  capture_output=True, text=True, timeout=120) -> CompletedProcess:
         try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
-            result.check_returncode()  # Raises a CalledProcessError if return code is non-zero
+            result = sb_run(command, shell=True, capture_output=capture_output, text=text, timeout=timeout)
+            result.check_returncode()
+            print(result.stderr.strip()) if result.stderr else ...
+            print(result.stdout.strip()) if result.stdout else ...
             return result
-        except subprocess.CalledProcessError as e:
+        except CalledProcessError as e:
             raise VirtualMachinException(f"[red] Command '{command}' failed with error: {e}")

@@ -17,14 +17,8 @@ class VirtualMachine:
 
     def __init__(self, vm_id: str):
         self.name = vm_id
-
-    @property
-    def snapshot(self) -> Snapshot:
-        return Snapshot(self.name)
-
-    @property
-    def network_adapter(self) -> NetworkAdapter:
-        return NetworkAdapter(self.name)
+        self.snapshot = Snapshot(self.name)
+        self.network_adapter = NetworkAdapter(self.name)
 
     def get_group_name(self) -> Optional[str]:
         group_name = self.get_parameter('groups')

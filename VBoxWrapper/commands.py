@@ -39,10 +39,9 @@ class Commands:
         return getoutput(command)
 
     @staticmethod
-    def run(command: str,  capture_output=True, text=True, timeout=120) -> CompletedProcess:
+    def run(command: str,  capture_output=True, text=True, timeout=60) -> CompletedProcess:
         try:
-            result = sb_run(command, shell=True, capture_output=capture_output, text=text, timeout=timeout)
-            result.check_returncode()
+            result = sb_run(command, shell=True, capture_output=capture_output, text=text, timeout=timeout, check=True)
             print(result.stderr.strip()) if result.stderr else ...
             print(result.stdout.strip()) if result.stdout else ...
             return result

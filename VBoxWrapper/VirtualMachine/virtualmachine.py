@@ -4,7 +4,8 @@ from typing import Optional
 
 from ..console import MyConsole
 from ..commands import Commands
-from VBox.VMExceptions import VirtualMachinException
+from ..VMExceptions import VirtualMachinException
+
 from .network_adapter import NetworkAdapter
 from .snapshot import Snapshot
 
@@ -104,8 +105,9 @@ class VirtualMachine:
     def run(self, headless: bool = False) -> None:
         if self.power_status() is False:
             print(f"[green]|INFO|{self.name}| Starting VirtualMachine")
-            return self._cmd.run(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
-        print(f"[red]|INFO|{self.name}| VirtualMachine already is running")
+            self._cmd.run(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
+        else:
+            print(f"[red]|INFO|{self.name}| VirtualMachine already is running")
 
     def power_status(self) -> bool:
         vm_state = self.get_parameter('VMState')

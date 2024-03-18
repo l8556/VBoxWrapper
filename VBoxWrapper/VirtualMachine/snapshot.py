@@ -2,7 +2,7 @@
 import time
 
 from ..commands import Commands
-from VBox.console import MyConsole
+from ..console import MyConsole
 
 console = MyConsole().console
 print = console.print

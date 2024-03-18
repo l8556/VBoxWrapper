@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
 
-from VBox.VMExceptions import VirtualMachinException
+from ..VMExceptions import VirtualMachinException
 from ..commands import Commands
-from VBox.console import MyConsole
+from ..console import MyConsole
 
 console = MyConsole().console
 print = console.print

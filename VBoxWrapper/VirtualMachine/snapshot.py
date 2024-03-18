@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 import time
+from rich.console import Console
 
 from ..commands import Commands
-from ..console import MyConsole
 
-console = MyConsole().console
+console = Console()
 print = console.print
-
 
 class Snapshot:
     _cmd = Commands()

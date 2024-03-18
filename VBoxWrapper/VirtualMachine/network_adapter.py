@@ -3,9 +3,9 @@ import time
 
 from ..VMExceptions import VirtualMachinException
 from ..commands import Commands
-from ..console import MyConsole
+from rich.console import Console
 
-console = MyConsole().console
+console = Console()
 print = console.print
 
 

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 import time
 from typing import Optional
+from rich.console import Console
 
-from ..console import MyConsole
 from ..commands import Commands
 from ..VMExceptions import VirtualMachinException
 
 from .network_adapter import NetworkAdapter
 from .snapshot import Snapshot
 
-console = MyConsole().console
+console = Console()
 print = console.print
 
 

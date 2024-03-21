@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from subprocess import getoutput, CalledProcessError, run as sb_run
+from subprocess import getoutput, call
 from functools import wraps
-
-from subprocess import CompletedProcess
-from .VMExceptions import VirtualMachinException
 
 def singleton(class_):
     __instances = {}
@@ -39,11 +36,5 @@ class Commands:
         return getoutput(command)
 
     @staticmethod
-    def run(command: str,  capture_output=True, text=True, timeout=60) -> CompletedProcess:
-        try:
-            result = sb_run(command, shell=True, capture_output=capture_output, text=text, timeout=timeout, check=True)
-            print(result.stderr.strip()) if result.stderr else ...
-            print(result.stdout.strip()) if result.stdout else ...
-            return result
-        except CalledProcessError as e:
-            raise VirtualMachinException(f"[red] Command '{command}' failed with error: {e}")
+    def run(command: str) -> None:
+        call(command, shell=True)

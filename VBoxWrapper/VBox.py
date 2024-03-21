@@ -10,6 +10,10 @@ from subprocess import getoutput
 class Vbox:
 
     def vm_list(self, group_name: str = None) -> list[list[str]]:
+        """
+        :param group_name:
+        :return: list with list of virtual machine names and uuid: [[name, uuid]]
+        """
         vm_list = [
             [vm[0].replace('"', ''), vm[1].translate(str.maketrans('', '', '{}'))]
             for vm in [vm.split() for vm in getoutput(cmd.list).split('\n')]
@@ -36,6 +40,11 @@ class Vbox:
         return [basename(group) for group in getoutput(cmd.group_list).replace('"', '').split('\n')]
 
     def check_group_name(self, group_name: str) -> str:
+        """
+        Checks if the group exists in the Vbox
+        :param group_name:
+        :return: group name, if exist
+        """
         existing_names = self.get_group_list()
         if group_name in existing_names:
             return group_name

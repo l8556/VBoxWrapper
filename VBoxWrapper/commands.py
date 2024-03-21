@@ -1,6 +1,21 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
+from subprocess import getoutput, call
+from functools import wraps
 
+def singleton(class_):
+    __instances = {}
+
+    @wraps(class_)
+    def getinstance(*args, **kwargs):
+        if class_ not in __instances:
+            __instances[class_] = class_(*args, **kwargs)
+        return __instances[class_]
+
+    return getinstance
+
+
+@singleton
 @dataclass(frozen=True)
 class Commands:
     vboxmanage: str = 'vboxmanage'
@@ -15,3 +30,11 @@ class Commands:
     wait: str = f"{vboxmanage} guestproperty wait"
     enumerate: str = f"{vboxmanage} guestproperty enumerate"
     guestcontrol: str = f"{vboxmanage} guestcontrol"
+
+    @staticmethod
+    def get_output(command: str) -> str:
+        return getoutput(command)
+
+    @staticmethod
+    def run(command: str) -> None:
+        call(command, shell=True)

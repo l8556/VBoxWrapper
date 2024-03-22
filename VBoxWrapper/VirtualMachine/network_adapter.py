@@ -17,10 +17,6 @@ class NetworkAdapter:
     _cmd = Commands()
 
     def __init__(self, vm_id: str):
-        """
-        Initialize NetworkAdapter with the virtual machine ID.
-        :param vm_id: Virtual machine ID.
-        """
         self.name = vm_id
 
     def set(

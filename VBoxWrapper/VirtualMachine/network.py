@@ -9,9 +9,9 @@ console = Console()
 print = console.print
 
 
-class NetworkAdapter:
+class Network:
     """
-    Class to manage network adapters of a virtual machine.
+    Class for managing the virtual machine network.
     """
 
     _cmd = Commands()
@@ -19,7 +19,7 @@ class NetworkAdapter:
     def __init__(self, vm_id: str):
         self.name = vm_id
 
-    def set(
+    def set_adapter(
             self,
             turn: bool = True,
             adapter_number: int | str = 1,
@@ -52,7 +52,7 @@ class NetworkAdapter:
             f'{f"adapter name: [cyan]{_adapter_name}[/]" if _adapter_name else ""}'.strip()
         )
 
-    def list(self) -> None:
+    def adapter_list(self) -> None:
         """
         List bridged network interfaces.
         """

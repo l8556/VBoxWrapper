@@ -6,7 +6,7 @@ from rich.console import Console
 from ..commands import Commands
 from ..VMExceptions import VirtualMachinException
 
-from .network_adapter import NetworkAdapter
+from .network import Network
 from .snapshot import Snapshot
 
 console = Console()
@@ -27,7 +27,7 @@ class VirtualMachine:
         """
         self.name = vm_id
         self.snapshot = Snapshot(self.name)
-        self.network_adapter = NetworkAdapter(self.name)
+        self.network = Network(self.name)
 
     def get_group_name(self) -> Optional[str]:
         """

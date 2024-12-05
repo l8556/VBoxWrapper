@@ -171,28 +171,57 @@ class VirtualMachine:
         print(f"[red]|INFO|{self.name}| Unable to determine virtual machine status")
         return False
 
-    def get_parameter(self, parameter: str) -> Optional[str]:
+    def get_os_type(self) -> Optional[str]:
+        """
+        Retrieve the operating system type of the virtual machine.
+
+        This method attempts to extract the operating system type using
+        the parameter '/VirtualBox/GuestInfo/OS/Product'. If the parameter
+        contains multiple parts separated by '@', it returns the first part
+        after stripping whitespace.
+
+        :return: The operating system type as a string, or None if unavailable.
+        """
+        param_value = self.get_parameter(parameter='/VirtualBox/GuestInfo/OS/Product', machine_readable_info=False)
+        if param_value:
+            return param_value.split('@', 1)[0].strip()
+        return None
+
+    def get_parameter(self, parameter: str, machine_readable_info: bool = True) -> Optional[str]:
         """
         Get a specific parameter of the virtual machine.
         :param parameter: Parameter to retrieve.
+        :param machine_readable_info: If True, retrieves detailed information in machine-readable format. False otherwise.
         :return: Value of the parameter.
         """
-        for line in self.get_info(full=True).split('\n'):
-            if line.lower().startswith(f"{parameter.lower()}="):
-                return line.strip().split('=', 1)[1].strip().replace("\"", '')
+        param_lower = parameter.lower()
+        for line in self.get_info(machine_readable=machine_readable_info).splitlines():
+            if line.lower().startswith(param_lower):
+                _, _, value = line.partition('=')
+                return value.strip().replace('"', '')
         return None
 
-    def stop(self) -> None:
+    def stop(self, wait_until_shutdown: bool = True) -> None:
+        """
+        Shutdown the virtual machine.
+        This method powers off the virtual machine by sending the poweroff command.
+
+        :param wait_until_shutdown: If True, the method waits until the virtual machine
+        has shut down completely before returning. If False, it returns immediately after sending the poweroff command.
+        :return: None
+        """
         print(f"[green]|INFO|{self.name}| Shutting down the virtual machine")
         self._cmd.run(f'{self._cmd.controlvm} {self.name} poweroff')
-        self.wait_until_shutdown()
 
-    def get_info(self, full: bool = False) -> str:
+        if wait_until_shutdown:
+            self.wait_until_shutdown()
+
+    def get_info(self, machine_readable: bool = False) -> str:
         """
         Get information about the virtual machine.
-        :param full: True to retrieve full information, False otherwise.
+        :param machine_readable: If True, retrieves detailed information in machine-readable format, False otherwise.
         :return: Information about the virtual machine.
         """
-        if full:
+        if machine_readable:
             return self._cmd.get_output(f"{self._cmd.showvminfo} {self.name} --machinereadable")
         return self._cmd.get_output(f'{self._cmd.enumerate} {self.name}')

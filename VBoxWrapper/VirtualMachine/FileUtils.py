@@ -16,9 +16,9 @@ class FileUtils:
         :param username: Username for authentication.
         :param password: Password for authentication.
         """
-        self.name = vm_id
-        self._auth_cmd = f"--username {username} --password {password}"
         self.vm = vm_id if isinstance(vm_id, VirtualMachine) else VirtualMachine(vm_id=vm_id)
+        self.name = self.vm.name
+        self._auth_cmd = f"--username {username} --password {password}"
         self.os_type = self.vm.get_os_type().lower()
 
     def copy_to(self, local_path: str, remote_path: str) -> None:

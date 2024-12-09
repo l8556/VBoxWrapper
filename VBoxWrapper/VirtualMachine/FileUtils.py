@@ -9,7 +9,7 @@ class FileUtils:
 
     _cmd = Commands()
 
-    def __init__(self, vm_id: str, username: str,  password: str):
+    def __init__(self, vm_id: str | VirtualMachine, username: str,  password: str):
         """
         Initialize FileUtils with the virtual machine ID, username, and password.
         :param vm_id: Virtual machine ID.
@@ -18,7 +18,7 @@ class FileUtils:
         """
         self.name = vm_id
         self._auth_cmd = f"--username {username} --password {password}"
-        self.vm = VirtualMachine(vm_id=vm_id)
+        self.vm = vm_id if isinstance(vm_id, VirtualMachine) else VirtualMachine(vm_id=vm_id)
         self.os_type = self.vm.get_os_type().lower()
 
     def copy_to(self, path_from: str, path_to: str) -> None:

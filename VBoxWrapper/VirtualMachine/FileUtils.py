@@ -21,32 +21,43 @@ class FileUtils:
         self.vm = vm_id if isinstance(vm_id, VirtualMachine) else VirtualMachine(vm_id=vm_id)
         self.os_type = self.vm.get_os_type().lower()
 
-    def copy_to(self, path_from: str, path_to: str) -> None:
+    def copy_to(self, local_path: str, remote_path: str) -> None:
         """
         Copy files from source to destination on the virtual machine.
-        :param path_from: Source path.
-        :param path_to: Destination path.
+        :param local_path: Source path.
+        :param remote_path: Destination path.
         """
         self._cmd.run(
-            f"{self._cmd.guestcontrol} {self.name} copyto {path_from} {path_to} {self._auth_cmd}"
+            f"{self._cmd.guestcontrol} {self.name} copyto {local_path} {remote_path} {self._auth_cmd}"
         )
 
-    def run_cmd(self, command: str, shell: str = None) -> None:
+    def copy_from(self, remote_path: str, local_path: str) -> None:
+        """
+        Copy files from source to destination on the virtual machine.
+        :param local_path: Source path.
+        :param remote_path: Destination path.
+        """
+        self._cmd.run(
+            f"{self._cmd.guestcontrol} {self.name} copyfrom {remote_path} {local_path} {self._auth_cmd}"
+        )
+
+    def run_cmd(self, command: str, shell: str = None, wait_stdout: bool = True) -> None:
         """
         Run a command on the virtual machine.
 
         This method constructs and executes a command using the appropriate shell
         for the virtual machine's operating system.
 
+        :param wait_stdout: The command to wait for stdout
         :param command: The command to run on the virtual machine.
         :param shell: Optional shell to use for running the command. If not provided,
         the default shell for the operating system is used.
         """
         shell_to_use = shell or self._get_default_shell()
-        cmd = f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use)} "{command}"'
+        cmd = f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"'
         self._cmd.run(cmd)
 
-    def _get_run_cmd(self, shell: str):
+    def _get_run_cmd(self, shell: str, wait_stdout: bool = True):
         """
         Construct the command to execute on the virtual machine.
 
@@ -56,9 +67,13 @@ class FileUtils:
         :param shell: The shell to use for running the command.
         :return: A formatted command string for execution.
         """
+        _wait_stdout = " --wait-stdout" if wait_stdout else ""
         if 'windows' in self.os_type.lower():
-            return f'run --exe "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" {self._auth_cmd} --wait-stdout -- {shell}'
-        return f'run {self._auth_cmd} --wait-stdout -- {shell} -c'
+            return (
+                f'run --exe "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" '
+                f'{self._auth_cmd}{_wait_stdout} -- {shell}'
+            )
+        return f'run {self._auth_cmd}{_wait_stdout} -- {shell} -c'
 
     def _get_default_shell(self) -> str:
         """

@@ -27,7 +27,7 @@ class FileUtils:
         :param local_path: Source path.
         :param remote_path: Destination path.
         """
-        self._cmd.run(
+        self._cmd.call(
             f"{self._cmd.guestcontrol} {self.name} copyto {local_path} {remote_path} {self._auth_cmd}"
         )
 
@@ -37,7 +37,7 @@ class FileUtils:
         :param local_path: Source path.
         :param remote_path: Destination path.
         """
-        self._cmd.run(
+        self._cmd.call(
             f"{self._cmd.guestcontrol} {self.name} copyfrom {remote_path} {local_path} {self._auth_cmd}"
         )
 
@@ -55,7 +55,7 @@ class FileUtils:
         """
         shell_to_use = shell or self._get_default_shell()
         cmd = f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"'
-        self._cmd.run(cmd)
+        self._cmd.call(cmd)
 
     def _get_run_cmd(self, shell: str, wait_stdout: bool = True):
         """

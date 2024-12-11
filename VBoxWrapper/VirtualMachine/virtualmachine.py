@@ -38,7 +38,7 @@ class VirtualMachine:
         return group_name.strip().replace('/', '') if group_name else None
 
     def shutdown(self) -> None:
-        self._cmd.run(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
+        self._cmd.call(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
 
     def wait_until_shutdown(self, timeout: int = 120) -> bool:
         """
@@ -61,7 +61,7 @@ class VirtualMachine:
         :param username: Username.
         :param password: Current password.
         """
-        self._cmd.run(
+        self._cmd.call(
             f"{self._cmd.guestcontrol} {self.name} run "
             f"--username {username} --password {password} "
             f"--wait-stdout -- /bin/bash -c "
@@ -76,7 +76,7 @@ class VirtualMachine:
         which can lead to potential data leaks.
         :param turn_on: True - включить, False - отключить
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --spec-ctrl {'on' if turn_on else 'off'}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --spec-ctrl {'on' if turn_on else 'off'}")
         print(f"[green]|INFO|{self.name}| Speculative Execution Control is [cyan]{'on' if turn_on else 'off'}[/]")
 
     def audio(self, turn: bool) -> None:
@@ -84,7 +84,7 @@ class VirtualMachine:
         Enable or disable audio interface.
         :param turn: True to enable, False to disable.
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --audio-driver {'default' if turn else 'none'}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --audio-driver {'default' if turn else 'none'}")
         print(f"[green]|INFO|{self.name}| Audio interface is [cyan]{'on' if turn else 'off'}[/]")
 
     def nested_virtualization(self, turn: bool) -> None:
@@ -93,7 +93,7 @@ class VirtualMachine:
         :param turn: True to enable, False to disable.
         """
         _turn = 'on' if turn else 'off'
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --nested-hw-virt {_turn}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --nested-hw-virt {_turn}")
         print(f"[green]|INFO|{self.name}| Nested VT-x/AMD-V is [cyan]{_turn}[/]")
 
     def set_cpus(self, num: int) -> None:
@@ -101,7 +101,7 @@ class VirtualMachine:
         Set the number of CPU cores.
         :param num: Number of CPU cores.
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --cpus {num}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --cpus {num}")
         print(f"[green]|INFO|{self.name}| The number of processor cores is set to [cyan]{num}[/]")
 
     def set_memory(self, num: int) -> None:
@@ -109,7 +109,7 @@ class VirtualMachine:
         Set the amount of memory.
         :param num: Amount of memory.
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --memory {num}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --memory {num}")
         print(f"[green]|INFO|{self.name}| Installed RAM quantity: [cyan]{num}[/]")
 
     def wait_logged_user(self, timeout: int = 300, status_bar: bool = False) -> None:
@@ -156,7 +156,7 @@ class VirtualMachine:
         """
         if self.power_status() is False:
             print(f"[green]|INFO|{self.name}| Starting VirtualMachine")
-            self._cmd.run(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
+            self._cmd.call(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
         else:
             print(f"[red]|INFO|{self.name}| VirtualMachine already is running")
 
@@ -211,7 +211,7 @@ class VirtualMachine:
         :return: None
         """
         print(f"[green]|INFO|{self.name}| Shutting down the virtual machine")
-        self._cmd.run(f'{self._cmd.controlvm} {self.name} poweroff')
+        self._cmd.call(f'{self._cmd.controlvm} {self.name} poweroff')
 
         if wait_until_shutdown:
             self.wait_until_shutdown()

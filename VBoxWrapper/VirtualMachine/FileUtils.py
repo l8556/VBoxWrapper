@@ -55,7 +55,7 @@ class FileUtils:
         """
         shell_to_use = shell or self._get_default_shell()
         cmd = f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"'
-        self._cmd.call(cmd)
+        self._cmd.run(cmd)
 
     def _get_run_cmd(self, shell: str, wait_stdout: bool = True):
         """

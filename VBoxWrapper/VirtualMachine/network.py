@@ -41,7 +41,7 @@ class Network:
         _adapter_name = f"--bridgeadapter{adapter_number} \"{adapter_name}\"" \
             if adapter_name and turn and connect_type.lower() == 'bridged' else ''
 
-        self._cmd.run(
+        self._cmd.call(
             f"{self._cmd.modifyvm} {self.name} "
             f"--nic{adapter_number} {connect_type.lower() if turn else 'none'} {_adapter_name}".strip()
         )
@@ -56,7 +56,7 @@ class Network:
         """
         List bridged network interfaces.
         """
-        self._cmd.run(f"{self._cmd.vboxmanage} list bridgedifs")
+        self._cmd.call(f"{self._cmd.vboxmanage} list bridgedifs")
 
     def wait_up(self, timeout: int = 300, status_bar: bool = False) -> None:
         """

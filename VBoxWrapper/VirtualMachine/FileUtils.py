@@ -50,7 +50,7 @@ class FileUtils:
             stdout: bool = True,
             stderr: bool = True,
             wait_stdout: bool = True,
-            status_bar: bool = True,
+            status_bar: bool = False,
             max_stdout_lines: int = 20
     ) -> CompletedProcess:
         """
@@ -62,7 +62,7 @@ class FileUtils:
         :param wait_stdout: The command to wait for stdout
         :param stdout: If True, captures and optionally prints the standard output. Defaults to True.
         :param stderr: If True, captures and optionally prints the standard error. Defaults to True.
-        :param status_bar: If True, displays a status bar for output updates. Defaults to True.
+        :param status_bar: If True, displays a status bar for output updates. Defaults to False.
         :param max_stdout_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
         :param command: The command to run on the virtual machine.
         :param shell: Optional shell to use for running the command. If not provided,

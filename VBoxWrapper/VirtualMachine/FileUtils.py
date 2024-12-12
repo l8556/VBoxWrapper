@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from subprocess import CompletedProcess
+
 from ..commands import Commands
 from ..VirtualMachine import VirtualMachine
 
@@ -41,7 +43,13 @@ class FileUtils:
             f"{self._cmd.guestcontrol} {self.name} copyfrom {remote_path} {local_path} {self._auth_cmd}"
         )
 
-    def run_cmd(self, command: str, shell: str = None, wait_stdout: bool = True) -> None:
+    def run_cmd(
+            self,
+            command: str,
+            shell: str = None,
+            wait_stdout: bool = True,
+            status_bar: bool = True
+    ) -> CompletedProcess:
         """
         Run a command on the virtual machine.
 
@@ -49,13 +57,14 @@ class FileUtils:
         for the virtual machine's operating system.
 
         :param wait_stdout: The command to wait for stdout
+        :param status_bar: If True, displays a status bar for output updates. Defaults to True.
         :param command: The command to run on the virtual machine.
         :param shell: Optional shell to use for running the command. If not provided,
         the default shell for the operating system is used.
         """
         shell_to_use = shell or self._get_default_shell()
         cmd = f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"'
-        self._cmd.run(cmd)
+        return self._cmd.run(cmd, stdout_color='cyan', status_bar=status_bar)
 
     def _get_run_cmd(self, shell: str, wait_stdout: bool = True):
         """

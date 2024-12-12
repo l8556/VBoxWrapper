@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from contextlib import nullcontext
 from dataclasses import dataclass
-from subprocess import getoutput, call, CompletedProcess, Popen, PIPE, TimeoutExpired
+from subprocess import getoutput, call, CompletedProcess, Popen, PIPE
 from functools import wraps
-import psutil
 from rich import print
+from rich.console import Console
 
 def singleton(class_):
     __instances = {}
@@ -44,59 +45,62 @@ class Commands:
     @staticmethod
     def run(
             command: str,
-            timeout: int = None,
-            shell: bool = True,
             stdout: bool = True,
-            live_stdout: bool = True,
             stderr: bool = True,
-            kill_children_processes: bool = False
+            status_bar: bool = True,
+            max_lines: int = 20,
+            stdout_color: str = None,
+            stderr_color: str = 'red',
     ) -> CompletedProcess:
         """
-        Run a shell command and return a `CompletedProcess` object.
+        Executes a shell command and returns a `CompletedProcess` object containing the results.
 
-        :param live_stdout:
-        :param command: The command to run.
-        :param timeout: (Optional) The maximum time to wait for the command to finish (in seconds). Defaults to None.
-        :param shell: (Optional) If True, the command will be executed through the shell. Defaults to True.
-        :param stdout: (Optional) If True, prints the standard output of the command. Defaults to True.
-        :param stderr: (Optional) If True, prints the standard error of the command. Defaults to True.
-        :param kill_children_processes: (Optional) If True, kill any child processes spawned by the command if it times out. Defaults to False.
-        :return: A `CompletedProcess` object representing the result of the command execution.
+        :param command: The command to execute in the shell.
+        :param stdout: If True, captures and optionally prints the standard output. Defaults to True.
+        :param stderr: If True, captures and optionally prints the standard error. Defaults to True.
+        :param status_bar: If True, displays a status bar for output updates. Defaults to True.
+        :param max_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
+        :param stdout_color: Color for the standard output text when printed (Rich markup). Defaults to None.
+        :param stderr_color: Color for the standard error text when printed (Rich markup). Defaults to 'red'.
+        :return: A `CompletedProcess` object containing the command, return code, stdout, and stderr.
         """
+
+        def tail_lines(lines: list):
+            """Keeps only the last `max_lines` from the given list of lines."""
+            return lines[-max_lines:]
+
         with Popen(
                 command,
                 stdout=PIPE,
                 stderr=PIPE,
                 text=True,
-                shell=shell
+                shell=True
         ) as process:
-            if live_stdout:
-                for line in process.stdout:
-                    print(f"[green]{line}", end="")
-                process.wait()
+            _stdout = []
+            _stderr = []
 
-            try:
-                _stdout, _stderr = process.communicate(timeout=timeout)
-                completed_process = CompletedProcess(process.args, process.returncode, _stdout.strip(), _stderr.strip())
+            if stdout:
+                color = f"[{stdout_color}]" if stdout_color else ''
+                with Console().status(f'{color}Exec command:{command}') if status_bar else nullcontext() as status:
+                    for line in process.stdout:
+                        _stdout.append(line.strip())
+                        if status_bar:
+                            recent_lines = "\n".join(tail_lines(_stdout))
+                            status.update(f'{color}{recent_lines}')
+                        else:
+                            print(f"{color}{line}", end="")
 
-            except TimeoutExpired:
-                children_processes = psutil.Process(process.pid).children() if kill_children_processes else None
-                process.kill()
+            if stderr:
+                color = f"[{stderr_color}]" if stderr_color else ''
+                for line in process.stderr:
+                    line = line.strip()
+                    _stderr.append(line)
+                    print(f"{color}{line} ", end="")
 
-                if children_processes:
-                    for _process in children_processes:
-                        print(f"Killed children process: {_process.name()}, pid: {_process.pid}") if stdout else None
-                        psutil.Process(_process.pid).kill()
-
-                completed_process = CompletedProcess(
-                    process.args,
-                    1,
-                    '',
-                    f"timeout expired when executing the command: {command}"
-                )
-
-            finally:
-                print(1)
-                print(completed_process.stderr) if stderr else None
-                print(completed_process.stdout) if stdout else None
-                return completed_process
+            process.wait()
+            return CompletedProcess(
+                process.args,
+                returncode=process.returncode,
+                stdout="\n".join(_stdout).strip(),
+                stderr="\n".join(_stderr).strip()
+            )

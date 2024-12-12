@@ -47,8 +47,11 @@ class FileUtils:
             self,
             command: str,
             shell: str = None,
+            stdout: bool = True,
+            stderr: bool = True,
             wait_stdout: bool = True,
-            status_bar: bool = True
+            status_bar: bool = True,
+            max_stdout_lines: int = 20
     ) -> CompletedProcess:
         """
         Run a command on the virtual machine.
@@ -57,14 +60,24 @@ class FileUtils:
         for the virtual machine's operating system.
 
         :param wait_stdout: The command to wait for stdout
+        :param stdout: If True, captures and optionally prints the standard output. Defaults to True.
+        :param stderr: If True, captures and optionally prints the standard error. Defaults to True.
         :param status_bar: If True, displays a status bar for output updates. Defaults to True.
+        :param max_stdout_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
         :param command: The command to run on the virtual machine.
         :param shell: Optional shell to use for running the command. If not provided,
         the default shell for the operating system is used.
+        :return: A `CompletedProcess` object containing the command, return code, stdout, and stderr.
         """
         shell_to_use = shell or self._get_default_shell()
-        cmd = f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"'
-        return self._cmd.run(cmd, stdout_color='cyan', status_bar=status_bar)
+        return self._cmd.run(
+            f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"',
+            stdout=stdout,
+            stderr=stderr,
+            stdout_color='cyan' if status_bar else None,
+            status_bar=status_bar,
+            max_stdout_lines=max_stdout_lines
+        )
 
     def _get_run_cmd(self, shell: str, wait_stdout: bool = True):
         """

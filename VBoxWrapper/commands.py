@@ -48,7 +48,7 @@ class Commands:
             stdout: bool = True,
             stderr: bool = True,
             status_bar: bool = True,
-            max_lines: int = 20,
+            max_stdout_lines: int = 20,
             stdout_color: str = None,
             stderr_color: str = 'red',
     ) -> CompletedProcess:
@@ -59,7 +59,7 @@ class Commands:
         :param stdout: If True, captures and optionally prints the standard output. Defaults to True.
         :param stderr: If True, captures and optionally prints the standard error. Defaults to True.
         :param status_bar: If True, displays a status bar for output updates. Defaults to True.
-        :param max_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
+        :param max_stdout_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
         :param stdout_color: Color for the standard output text when printed (Rich markup). Defaults to None.
         :param stderr_color: Color for the standard error text when printed (Rich markup). Defaults to 'red'.
         :return: A `CompletedProcess` object containing the command, return code, stdout, and stderr.
@@ -67,7 +67,7 @@ class Commands:
 
         def tail_lines(lines: list):
             """Keeps only the last `max_lines` from the given list of lines."""
-            return lines[-max_lines:]
+            return lines[-max_stdout_lines:]
 
         with Popen(
                 command,
@@ -79,23 +79,24 @@ class Commands:
             _stdout = []
             _stderr = []
 
-            if stdout:
-                color = f"[{stdout_color}]" if stdout_color else ''
-                with Console().status(f'{color}Exec command:{command}') if status_bar else nullcontext() as status:
-                    for line in process.stdout:
-                        _stdout.append(line.strip())
+            stdout_color = f"[{stdout_color}]" if stdout_color else ''
+            stderr_color = f"[{stderr_color}]" if stderr_color else ''
+
+            with Console().status(f'{stdout_color}Exec command:{command}') if status_bar else nullcontext() as status:
+                for line in process.stdout:
+                    _stdout.append(line.strip())
+                    if stdout:
                         if status_bar:
                             recent_lines = "\n".join(tail_lines(_stdout))
-                            status.update(f'{color}{recent_lines}')
+                            status.update(f'{stdout_color}{recent_lines}')
                         else:
-                            print(f"{color}{line}", end="")
+                            print(f"{stdout_color}{line}", end="")
 
-            if stderr:
-                color = f"[{stderr_color}]" if stderr_color else ''
                 for line in process.stderr:
                     line = line.strip()
                     _stderr.append(line)
-                    print(f"{color}{line} ", end="")
+                    if stderr:
+                        print(f"{stderr_color}{line} ", end="")
 
             process.wait()
             return CompletedProcess(

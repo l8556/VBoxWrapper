@@ -198,7 +198,7 @@ class VirtualMachine:
         for line in self.get_info(machine_readable=machine_readable_info).splitlines():
             if line.lower().startswith(param_lower):
                 _, _, value = line.partition('=')
-                return value.strip().replace('"', '')
+                return value.replace('"', '').replace("'", '').strip()
         return None
 
     def stop(self, wait_until_shutdown: bool = True) -> None:

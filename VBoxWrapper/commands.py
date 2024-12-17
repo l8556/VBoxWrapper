@@ -39,8 +39,8 @@ class Commands:
         return getoutput(command)
 
     @staticmethod
-    def call(command: str) -> None:
-        call(command, shell=True)
+    def call(command: str) -> int:
+        return call(command, shell=True)
 
     @staticmethod
     def run(

@@ -90,7 +90,7 @@ class FileUtils:
         :return: A formatted command string for execution.
         """
         _wait_stdout = " --wait-stdout" if wait_stdout else ""
-        if 'windows' in self.os_type.lower():
+        if self.os_type and 'windows' in self.os_type.lower():
             return (
                 f'run --exe "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" '
                 f'{self._auth_cmd}{_wait_stdout} -- {shell}'
@@ -106,6 +106,6 @@ class FileUtils:
 
         :return: The default shell path as a string.
         """
-        if 'windows' in self.os_type.lower():
+        if self.os_type and 'windows' in self.os_type.lower():
             return 'powershell.exe'
         return '/usr/bin/bash'

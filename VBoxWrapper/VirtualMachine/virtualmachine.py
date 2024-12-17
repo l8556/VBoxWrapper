@@ -38,7 +38,7 @@ class VirtualMachine:
         return group_name.strip().replace('/', '') if group_name else None
 
     def shutdown(self) -> None:
-        self._cmd.run(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
+        self._cmd.call(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
 
     def wait_until_shutdown(self, timeout: int = 120) -> bool:
         """
@@ -61,7 +61,7 @@ class VirtualMachine:
         :param username: Username.
         :param password: Current password.
         """
-        self._cmd.run(
+        self._cmd.call(
             f"{self._cmd.guestcontrol} {self.name} run "
             f"--username {username} --password {password} "
             f"--wait-stdout -- /bin/bash -c "
@@ -76,7 +76,7 @@ class VirtualMachine:
         which can lead to potential data leaks.
         :param turn_on: True - включить, False - отключить
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --spec-ctrl {'on' if turn_on else 'off'}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --spec-ctrl {'on' if turn_on else 'off'}")
         print(f"[green]|INFO|{self.name}| Speculative Execution Control is [cyan]{'on' if turn_on else 'off'}[/]")
 
     def audio(self, turn: bool) -> None:
@@ -84,7 +84,7 @@ class VirtualMachine:
         Enable or disable audio interface.
         :param turn: True to enable, False to disable.
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --audio-driver {'default' if turn else 'none'}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --audio-driver {'default' if turn else 'none'}")
         print(f"[green]|INFO|{self.name}| Audio interface is [cyan]{'on' if turn else 'off'}[/]")
 
     def nested_virtualization(self, turn: bool) -> None:
@@ -93,7 +93,7 @@ class VirtualMachine:
         :param turn: True to enable, False to disable.
         """
         _turn = 'on' if turn else 'off'
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --nested-hw-virt {_turn}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --nested-hw-virt {_turn}")
         print(f"[green]|INFO|{self.name}| Nested VT-x/AMD-V is [cyan]{_turn}[/]")
 
     def set_cpus(self, num: int) -> None:
@@ -101,7 +101,7 @@ class VirtualMachine:
         Set the number of CPU cores.
         :param num: Number of CPU cores.
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --cpus {num}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --cpus {num}")
         print(f"[green]|INFO|{self.name}| The number of processor cores is set to [cyan]{num}[/]")
 
     def set_memory(self, num: int) -> None:
@@ -109,7 +109,7 @@ class VirtualMachine:
         Set the amount of memory.
         :param num: Amount of memory.
         """
-        self._cmd.run(f"{self._cmd.modifyvm} {self.name} --memory {num}")
+        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --memory {num}")
         print(f"[green]|INFO|{self.name}| Installed RAM quantity: [cyan]{num}[/]")
 
     def wait_logged_user(self, timeout: int = 300, status_bar: bool = False) -> None:
@@ -156,7 +156,7 @@ class VirtualMachine:
         """
         if self.power_status() is False:
             print(f"[green]|INFO|{self.name}| Starting VirtualMachine")
-            self._cmd.run(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
+            self._cmd.call(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
         else:
             print(f"[red]|INFO|{self.name}| VirtualMachine already is running")
 
@@ -171,28 +171,57 @@ class VirtualMachine:
         print(f"[red]|INFO|{self.name}| Unable to determine virtual machine status")
         return False
 
-    def get_parameter(self, parameter: str) -> Optional[str]:
+    def get_os_type(self) -> Optional[str]:
+        """
+        Retrieve the operating system type of the virtual machine.
+
+        This method attempts to extract the operating system type using
+        the parameter '/VirtualBox/GuestInfo/OS/Product'. If the parameter
+        contains multiple parts separated by '@', it returns the first part
+        after stripping whitespace.
+
+        :return: The operating system type as a string, or None if unavailable.
+        """
+        param_value = self.get_parameter(parameter='/VirtualBox/GuestInfo/OS/Product', machine_readable_info=False)
+        if param_value:
+            return param_value.split('@', 1)[0].strip()
+        return None
+
+    def get_parameter(self, parameter: str, machine_readable_info: bool = True) -> Optional[str]:
         """
         Get a specific parameter of the virtual machine.
         :param parameter: Parameter to retrieve.
+        :param machine_readable_info: If True, retrieves detailed information in machine-readable format. False otherwise.
         :return: Value of the parameter.
         """
-        for line in self.get_info(full=True).split('\n'):
-            if line.lower().startswith(f"{parameter.lower()}="):
-                return line.strip().split('=', 1)[1].strip().replace("\"", '')
+        param_lower = parameter.lower()
+        for line in self.get_info(machine_readable=machine_readable_info).splitlines():
+            if line.lower().startswith(param_lower):
+                _, _, value = line.partition('=')
+                return value.replace('"', '').replace("'", '').strip()
         return None
 
-    def stop(self) -> None:
-        print(f"[green]|INFO|{self.name}| Shutting down the virtual machine")
-        self._cmd.run(f'{self._cmd.controlvm} {self.name} poweroff')
-        self.wait_until_shutdown()
+    def stop(self, wait_until_shutdown: bool = True) -> None:
+        """
+        Shutdown the virtual machine.
+        This method powers off the virtual machine by sending the poweroff command.
 
-    def get_info(self, full: bool = False) -> str:
+        :param wait_until_shutdown: If True, the method waits until the virtual machine
+        has shut down completely before returning. If False, it returns immediately after sending the poweroff command.
+        :return: None
+        """
+        print(f"[green]|INFO|{self.name}| Shutting down the virtual machine")
+        self._cmd.call(f'{self._cmd.controlvm} {self.name} poweroff')
+
+        if wait_until_shutdown:
+            self.wait_until_shutdown()
+
+    def get_info(self, machine_readable: bool = False) -> str:
         """
         Get information about the virtual machine.
-        :param full: True to retrieve full information, False otherwise.
+        :param machine_readable: If True, retrieves detailed information in machine-readable format, False otherwise.
         :return: Information about the virtual machine.
         """
-        if full:
+        if machine_readable:
             return self._cmd.get_output(f"{self._cmd.showvminfo} {self.name} --machinereadable")
         return self._cmd.get_output(f'{self._cmd.enumerate} {self.name}')

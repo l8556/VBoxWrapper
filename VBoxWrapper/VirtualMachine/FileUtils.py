@@ -21,7 +21,7 @@ class FileUtils:
         self.vm = vm_id if isinstance(vm_id, VirtualMachine) else VirtualMachine(vm_id=vm_id)
         self.name = self.vm.name
         self._auth_cmd = f"--username {username} --password {password}"
-        self.os_type = self.vm.get_os_type().lower()
+        self.os_type = self.vm.get_os_type()
 
     def copy_to(self, local_path: str, remote_path: str) -> None:
         """

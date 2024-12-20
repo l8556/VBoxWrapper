@@ -21,7 +21,7 @@ class FileUtils:
         self.vm = vm_id if isinstance(vm_id, VirtualMachine) else VirtualMachine(vm_id=vm_id)
         self.name = self.vm.name
         self._auth_cmd = f"--username {username} --password {password}"
-        self.os_type = os_type or self.vm.get_os_type()
+        self.os_type = os_type
 
     def copy_to(self, local_path: str, remote_path: str) -> None:
         """
@@ -69,7 +69,7 @@ class FileUtils:
         the default shell for the operating system is used.
         :return: A `CompletedProcess` object containing the command, return code, stdout, and stderr.
         """
-        shell_to_use = shell or self._get_default_shell()
+        shell_to_use = shell or self._get_default_shell(self.os_type or self.vm.get_os_type())
         return self._cmd.run(
             f'{self._cmd.guestcontrol} {self.name} {self._get_run_cmd(shell_to_use, wait_stdout)} "{command}"',
             stdout=stdout,
@@ -90,14 +90,22 @@ class FileUtils:
         :return: A formatted command string for execution.
         """
         _wait_stdout = " --wait-stdout" if wait_stdout else ""
-        if self.os_type and 'windows' in self.os_type.lower():
-            return (
-                f'run --exe "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" '
-                f'{self._auth_cmd}{_wait_stdout} -- {shell}'
-            )
-        return f'run {self._auth_cmd}{_wait_stdout} -- {shell} -c'
+        return f'run{self._get_default_shell_path(shell)} {self._auth_cmd}{_wait_stdout} -- {shell}'
 
-    def _get_default_shell(self) -> str:
+    @staticmethod
+    def _get_default_shell_path(shell: str) -> str:
+        shell = shell.lower()
+
+        if "powershell" in shell:
+            return " --exe 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'"
+
+        if "cmd" in shell:
+            return " --exe 'C:\\Windows\\System32\\cmd.exe'"
+
+        return ''
+
+    @staticmethod
+    def _get_default_shell(os_type: str) -> str:
         """
         Retrieve the default shell for the virtual machine's operating system.
 
@@ -106,6 +114,6 @@ class FileUtils:
 
         :return: The default shell path as a string.
         """
-        if self.os_type and 'windows' in self.os_type.lower():
+        if os_type and 'windows' in os_type.lower():
             return 'powershell.exe'
-        return '/usr/bin/bash'
+        return '/usr/bin/bash -c'

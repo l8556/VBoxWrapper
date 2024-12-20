@@ -97,10 +97,10 @@ class FileUtils:
         shell = shell.lower()
 
         if "powershell" in shell:
-            return " --exe 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'"
+            return ' --exe "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"'
 
         if "cmd" in shell:
-            return " --exe 'C:\\Windows\\System32\\cmd.exe'"
+            return ' --exe "C:\\Windows\\System32\\cmd.exe"'
 
         return ''
 

@@ -23,23 +23,23 @@ class FileUtils:
         self._auth_cmd = f"--username {username} --password {password}"
         self.os_type = os_type
 
-    def copy_to(self, local_path: str, remote_path: str) -> None:
+    def copy_to(self, local_path: str, remote_path: str) -> CompletedProcess:
         """
         Copy files from source to destination on the virtual machine.
         :param local_path: Source path.
         :param remote_path: Destination path.
         """
-        self._cmd.call(
+        return self._cmd.run(
             f"{self._cmd.guestcontrol} {self.name} copyto {local_path} {remote_path} {self._auth_cmd}"
         )
 
-    def copy_from(self, remote_path: str, local_path: str) -> None:
+    def copy_from(self, remote_path: str, local_path: str) -> CompletedProcess:
         """
         Copy files from source to destination on the virtual machine.
         :param local_path: Source path.
         :param remote_path: Destination path.
         """
-        self._cmd.call(
+        return self._cmd.run(
             f"{self._cmd.guestcontrol} {self.name} copyfrom {remote_path} {local_path} {self._auth_cmd}"
         )
 

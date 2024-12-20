@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
+from contextlib import nullcontext
 
 from ..VMExceptions import VirtualMachinException
 from ..commands import Commands
@@ -58,31 +59,28 @@ class Network:
         """
         self._cmd.call(f"{self._cmd.vboxmanage} list bridgedifs")
 
-    def wait_up(self, timeout: int = 300, status_bar: bool = False) -> None:
+    def wait_up(self, timeout: int = 300, status_bar: bool = False, interval: int = 1) -> None:
         """
         Wait for the network adapter to be up.
         :param timeout: Timeout in seconds (default: 300).
         :param status_bar: Whether to show a progress bar (default: False).
         """
-        start_time = time.time()
         msg = f"[cyan]|INFO|{self.name}| Waiting for network adapter up"
-        status = console.status(msg)
-        status.start() if status_bar else print(msg)
+        print(msg) if status_bar else None
 
-        while time.time() - start_time < timeout:
-            status.update(f"{msg}: {(time.time() - start_time):.00f}/{timeout}") if status_bar else ...
-            ip_address = self.get_ip()
-            if ip_address:
-                print(f'[green]|INFO|{self.name}| The network adapter is running, ip: [cyan]{ip_address}[/]')
-                break
-            time.sleep(1)
-        else:
-            status.stop() if status_bar else ...
-            raise VirtualMachinException(
-                f"[red]|ERROR|{self.name}| Waiting time for the virtual machine network adapter to start has expired"
-            )
-
-        status.stop() if status_bar else ...
+        start_time = time.time()
+        with console.status(msg) if status_bar else nullcontext() as status:
+            while time.time() - start_time < timeout:
+                status.update(f"{msg}: {(time.time() - start_time):.00f}/{timeout}") if status_bar else None
+                ip_address = self.get_ip()
+                if ip_address:
+                    print(f'[green]|INFO|{self.name}| The network adapter is running, ip: [cyan]{ip_address}[/]')
+                    break
+                time.sleep(interval)
+            else:
+                raise VirtualMachinException(
+                    f"[red]|ERROR|{self.name}| Waiting time for the virtual machine network adapter to start has expired"
+                )
 
     def get_ip(self) -> str | None:
         """

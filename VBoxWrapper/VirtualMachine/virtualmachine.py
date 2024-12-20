@@ -187,8 +187,8 @@ class VirtualMachine:
     def get_guest_property(self, parameter: str) -> str:
         output = self._cmd.get_output(f'{self._cmd.guestproperty} {self.name} "{parameter}"')
         if output and output != 'No value set!':
-            _, value = output.split(':', maxsplit=2)
-            return value.strip() or ''
+            value = output.split(':', maxsplit=1)
+            return value[1].strip() if value and len(value) == 2 else ''
         return ''
 
     def get_parameter(self, parameter: str, machine_readable_info: bool = True) -> Optional[str]:

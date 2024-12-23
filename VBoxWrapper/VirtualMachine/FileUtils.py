@@ -88,9 +88,9 @@ class FileUtils:
         :param shell: The shell to use for running the command.
         :return: A formatted command string for execution.
         """
-        shell_to_use = shell or self._get_default_shell()
+        _shell = self._get_shell(shell) if shell else self._get_default_shell()
         _wait_stdout = " --wait-stdout" if wait_stdout else ""
-        return f'run{self._get_default_shell_path(shell_to_use)} {self._auth_cmd}{_wait_stdout} -- {shell}'
+        return f'run{self._get_default_shell_path(_shell)} {self._auth_cmd}{_wait_stdout} -- {_shell}'
 
     @staticmethod
     def _get_default_shell_path(shell: str) -> str:

@@ -93,10 +93,9 @@ class Commands:
                             print(f"{stdout_color}{line}", end="")
 
                 for line in process.stderr:
-                    line = line.strip()
-                    _stderr.append(line)
+                    _stderr.append(line.strip())
                     if stderr:
-                        print(f"{stderr_color}{line} ", end="")
+                        print(f"{stderr_color}{line}", end="")
 
             process.wait()
             return CompletedProcess(

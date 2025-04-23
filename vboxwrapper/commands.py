@@ -47,7 +47,7 @@ class Commands:
             command: str,
             stdout: bool = True,
             stderr: bool = True,
-            status_bar: bool = True,
+            status_bar: bool = False,
             max_stdout_lines: int = 20,
             stdout_color: str = None,
             stderr_color: str = 'red',
@@ -58,7 +58,7 @@ class Commands:
         :param command: The command to execute in the shell.
         :param stdout: If True, captures and optionally prints the standard output. Defaults to True.
         :param stderr: If True, captures and optionally prints the standard error. Defaults to True.
-        :param status_bar: If True, displays a status bar for output updates. Defaults to True.
+        :param status_bar: If True, displays a status bar for output updates. Defaults to False.
         :param max_stdout_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
         :param stdout_color: Color for the standard output text when printed (Rich markup). Defaults to None.
         :param stderr_color: Color for the standard error text when printed (Rich markup). Defaults to 'red'.
@@ -93,10 +93,9 @@ class Commands:
                             print(f"{stdout_color}{line}", end="")
 
                 for line in process.stderr:
-                    line = line.strip()
-                    _stderr.append(line)
+                    _stderr.append(line.strip())
                     if stderr:
-                        print(f"{stderr_color}{line} ", end="")
+                        print(f"{stderr_color}{line}", end="")
 
             process.wait()
             return CompletedProcess(

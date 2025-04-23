@@ -171,7 +171,7 @@ class VirtualMachine:
         print(f"[red]|INFO|{self.name}| Unable to determine virtual machine status")
         return False
 
-    def get_os_type(self) -> Optional[str]:
+    def get_os_type(self) -> str:
         """
         Retrieve the operating system type of the virtual machine.
 
@@ -182,10 +182,14 @@ class VirtualMachine:
 
         :return: The operating system type as a string, or None if unavailable.
         """
-        param_value = self.get_parameter(parameter='/VirtualBox/GuestInfo/OS/Product', machine_readable_info=False)
-        if param_value:
-            return param_value.split('@', 1)[0].strip()
-        return None
+        return self.get_guest_property('/VirtualBox/GuestInfo/OS/Product')
+
+    def get_guest_property(self, parameter: str) -> str:
+        output = self._cmd.get_output(f'{self._cmd.guestproperty} {self.name} "{parameter}"')
+        if output and output != 'No value set!':
+            value = output.split(':', maxsplit=1)
+            return value[1].strip() if value and len(value) == 2 else ''
+        return ''
 
     def get_parameter(self, parameter: str, machine_readable_info: bool = True) -> Optional[str]:
         """

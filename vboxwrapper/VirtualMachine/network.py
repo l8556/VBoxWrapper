@@ -53,6 +53,38 @@ class Network:
             f'{f"adapter name: [cyan]{_adapter_name}[/]" if _adapter_name else ""}'.strip()
         )
 
+    def get_bridged_interfaces(self) -> list[dict]:
+        """
+        Retrieve and parse a list of bridged network interfaces from VirtualBox.
+
+        This method runs the `VBoxManage list bridgedifs` command to obtain the available
+        bridged network interfaces on the host machine. It parses the output and returns a
+        list of dictionaries where each dictionary represents a bridged interface with its
+        respective properties, such as `Name`, `Status`, `IPAddress`, `MAC`, and others.
+
+        :return: A list of dictionaries, each containing details of a bridged network interface.
+        :rtype: list[dict]
+        """
+        result = self._cmd.run(f"{self._cmd.vboxmanage} list bridgedifs", stdout=False, stderr=True)
+        lines = result.stdout.splitlines()
+
+        adapters = []
+        adapter = {}
+
+        for line in lines:
+            if not line.strip():  # blank line = end of adapter description
+                if adapter:
+                    adapters.append(adapter)
+                    adapter = {}
+                continue
+            key, _, value = line.partition(':')
+            adapter[key.strip()] = value.strip()
+
+        if adapter:
+            adapters.append(adapter)  # add the last adapter
+
+        return adapters
+
     def adapter_list(self) -> None:
         """
         List bridged network interfaces.

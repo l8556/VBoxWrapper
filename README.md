@@ -96,7 +96,7 @@ Speculative Execution Control is a mechanism
 - `nested_virtualization(turn_on: bool)`: Enable or disable nested virtualization.
 - `set_cpus(num: int)`: Set the number of CPU cores.
 - `set_memory(num: int)`: Set the amount of memory.
-- `get_logged_user(num: int)`: Get the logged-in user.
+- `get_logged_user()`: Get the logged-in user.
 - `power_status()`: Check the power status of the virtual machine.
 - `get_os_type()`: Retrieve the operating system type of the virtual machine.
 - `get_info()`: Get information about the virtual machine.

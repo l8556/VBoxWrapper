@@ -5,8 +5,7 @@
 VBoxWrapper is a Python library that provides a high-level,
 object-oriented interface for managing Oracle VirtualBox virtual machines.
 It simplifies common VM management tasks such as starting, stopping,
-snapshot management,
-and network configuration through an intuitive Python API.
+snapshot management, and network configuration through an intuitive Python API.
 
 ## Features
 
@@ -14,7 +13,6 @@ and network configuration through an intuitive Python API.
 - **Snapshot Management**: Create, restore, and manage VM snapshots
 - **Network Configuration**: Configure VM network settings programmatically
 - **Group Operations**: Manage VMs in groups for batch operations
-
 
 ## Installation
 
@@ -82,6 +80,7 @@ The `Vbox` class provides methods to interact with the VirtualBox environment:
 The `VirtualMachine` class represents a single VM and provides methods to control it:
 
 #### Basic Operations
+
 - `start()`: Start the VM
 - `shutdown()`: Send ACPI power button event to shutdown the VM
 - `power_off()`: Force power off the VM
@@ -90,12 +89,14 @@ The `VirtualMachine` class represents a single VM and provides methods to contro
 - `reset()`: Reset the VM
 
 #### Snapshot Management
+
 - `snapshot.create(name, description="")`: Create a new snapshot
 - `snapshot.restore(name)`: Restore to a specific snapshot
 - `snapshot.delete(name)`: Delete a snapshot
 - `snapshot.list()`: List all snapshots
 
 #### Network Configuration
+
 - `network.set_nat_network(adapter, network_name)`: Configure NAT network
 - `network.set_bridged_adapter(adapter, interface=None)`: Configure bridged networking
 - `network.set_host_only_adapter(adapter, interface)`: Configure host-only networking

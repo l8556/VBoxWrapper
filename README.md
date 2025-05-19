@@ -117,7 +117,7 @@ from vboxwrapper import VirtualMachine
 vm = VirtualMachine("my-vm")
 
 # Take a snapshot
-vm.snapshot.create("clean-install", "Fresh OS installation")
+vm.snapshot.take("Fresh OS installation")
 
 # List snapshots
 snapshots = vm.snapshot.list()
@@ -135,8 +135,11 @@ from vboxwrapper import VirtualMachine
 vm = VirtualMachine("my-vm")
 
 # Configure NAT network
-vm.network.set_nat_network(1, "NatNetwork")
+vm.network.set_adapter(
+    turn=True,
+    adapter_number=1,
+    connect_type='bridged',
+    adapter_name="MyNetwork"
+)
 
-# Configure bridged networking
-vm.network.set_bridged_adapter(1, "eth0")
 ```

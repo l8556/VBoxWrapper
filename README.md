@@ -101,7 +101,6 @@ Speculative Execution Control is a mechanism
 - `get_os_type()`: Retrieve the operating system type of the virtual machine.
 - `get_info()`: Get information about the virtual machine.
 
-
 #### Snapshot Management
 
 - `snapshot.take(name)`: Create a new snapshot
@@ -112,10 +111,11 @@ Speculative Execution Control is a mechanism
 
 #### Network Configuration
 
-- `network.set_adapter(
-turn: bool = True, adapter_number: int | str = 1, connect_type: str = 'nat', adapter_name: str = None)`:
-Set network adapter settings.
-- `network.get_bridged_interfaces()`: Retrieve and parse a list of bridged network interfaces from VirtualBox.
+- `network.set_adapter(turn: bool = True, adapter_number: int | str = 1,
+  connect_type: str = 'nat', adapter_name: str = None)`: Set network
+  adapter settings.
+- `network.get_bridged_interfaces()`: Retrieve and parse a list of
+  bridged network interfaces from VirtualBox.
 - `network.adapter_list()`: List bridged network interfaces.
 - `network.get_ip()`: Get the IP address of the network adapter.
 

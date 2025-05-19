@@ -146,5 +146,4 @@ vm.network.set_adapter(
     connect_type='bridged',
     adapter_name="MyNetwork"
 )
-
 ```

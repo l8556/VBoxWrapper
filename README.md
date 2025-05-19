@@ -49,18 +49,22 @@ print("Available VMs:", vms)
 vm = VirtualMachine("your-vm-name")
 
 # Start the VM
-vm.start()
+vm.run()
 
 # Take a snapshot
-vm.snapshot.create("before-update")
+vm.snapshot.take("before-update")
 # ... perform some operations ...
 
 # Revert to snapshot
 vm.snapshot.restore("before-update")
 
-
 # Configure network
-vm.network.set_nat_network(1, "NatNetwork")
+vm.network.set_adapter(
+    turn=True,
+    adapter_number=1,
+    connect_type='bridged',
+    adapter_name="MyNetwork"
+)
 # Shutdown the VM
 vm.shutdown()
 ```
@@ -83,26 +87,37 @@ to control it:
 
 #### Basic Operations
 
-- `start()`: Start the VM
+- `run()`: Start the VM
 - `shutdown()`: Send ACPI power button event to shutdown the VM
-- `power_off()`: Force power off the VM
-- `pause()`: Pause the VM
-- `resume()`: Resume a paused VM
-- `reset()`: Reset the VM
+- `stop()`: Force power off the VM
+- `speculative_execution_control(turn_on: bool = True)`:
+Speculative Execution Control is a mechanism
+- `audio(turn_on: bool = True)`: Enable or disable audio interface.
+- `nested_virtualization(turn_on: bool)`: Enable or disable nested virtualization.
+- `set_cpus(num: int)`: Set the number of CPU cores.
+- `set_memory(num: int)`: Set the amount of memory.
+- `get_logged_user()`: Get the logged-in user.
+- `power_status()`: Check the power status of the virtual machine.
+- `get_os_type()`: Retrieve the operating system type of the virtual machine.
+- `get_info()`: Get information about the virtual machine.
 
 #### Snapshot Management
 
-- `snapshot.create(name, description="")`: Create a new snapshot
+- `snapshot.take(name)`: Create a new snapshot
 - `snapshot.restore(name)`: Restore to a specific snapshot
 - `snapshot.delete(name)`: Delete a snapshot
 - `snapshot.list()`: List all snapshots
+- `snapshot.rename(old_name: str, new_name: str)`: Rename a snapshot.
 
 #### Network Configuration
 
-- `network.set_nat_network(adapter, network_name)`: Configure NAT network
-- `network.set_bridged_adapter(adapter, interface=None)`: Configure bridged networking
-- `network.set_host_only_adapter(adapter, interface)`: Configure host-only networking
-- `network.get_mac_address(adapter)`: Get MAC address of a network adapter
+- `network.set_adapter(turn: bool = True, adapter_number: int | str = 1,
+  connect_type: str = 'nat', adapter_name: str = None)`: Set network
+  adapter settings.
+- `network.get_bridged_interfaces()`: Retrieve and parse a list of
+  bridged network interfaces from VirtualBox.
+- `network.adapter_list()`: List bridged network interfaces.
+- `network.get_ip()`: Get the IP address of the network adapter.
 
 ## Examples
 

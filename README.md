@@ -2,7 +2,11 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue)](https://www.python.org/)
 
-VBoxWrapper is a Python library that provides a high-level, object-oriented interface for managing Oracle VirtualBox virtual machines. It simplifies common VM management tasks such as starting, stopping, snapshot management, and network configuration through an intuitive Python API.
+VBoxWrapper is a Python library that provides a high-level,
+object-oriented interface for managing Oracle VirtualBox virtual machines.
+It simplifies common VM management tasks such as starting, stopping,
+snapshot management,
+and network configuration through an intuitive Python API.
 
 ## Features
 

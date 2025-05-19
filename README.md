@@ -16,7 +16,8 @@ snapshot management, and network configuration through an intuitive Python API.
 
 ## Installation
 
-VBoxWrapper requires Python 3.7 or higher and VirtualBox to be installed on your system.
+VBoxWrapper requires Python 3.7 or higher and VirtualBox to be installed
+on your system.
 
 ### Using pip
 
@@ -77,7 +78,8 @@ The `Vbox` class provides methods to interact with the VirtualBox environment:
 
 ### VirtualMachine Class
 
-The `VirtualMachine` class represents a single VM and provides methods to control it:
+The `VirtualMachine` class represents a single VM and provides methods
+to control it:
 
 #### Basic Operations
 

@@ -4,7 +4,6 @@ version = "0.1.0"
 description = ""
 authors = [{ name = "l02", email = "l8556@outlook.com" }]
 readme = "README.md"
-repository='https://github.com/l8556/VBoxWrapper.git'
 requires-python = ">=3.12"
 classifiers=[
     'Operating System :: OS Independent',
@@ -21,3 +20,6 @@ classifiers=[
 dependencies = [
     "rich>=14",
 ]
+
+[project.urls]
+Repository = "https://github.com/l8556/VBoxWrapper.git"

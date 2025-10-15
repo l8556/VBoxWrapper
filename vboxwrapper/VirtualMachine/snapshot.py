@@ -56,3 +56,30 @@ class Snapshot:
         :param name: Name for the new snapshot.
         """
         self._cmd.call(f"{self._cmd.snapshot} {self.name} take {name}")
+
+    def get_current_snapshot_info(self) -> dict:
+        """
+        Get information about the current snapshot.
+        :return: Dictionary with snapshot information (name, uuid, description, timestamp).
+        """
+        def parse_value(line: str) -> str:
+            """Extract value from key=value line and remove quotes."""
+            return line.split('=', 1)[1].strip('"')
+
+        output = self._cmd.get_output(f"{self._cmd.snapshot} {self.name} list --machinereadable")
+        snapshot_info = {}
+        output_list = output.splitlines()
+
+        for line in output_list:
+            if line.startswith('CurrentSnapshotName='):
+                snapshot_info['name'] = parse_value(line)
+            elif line.startswith('CurrentSnapshotUUID='):
+                snapshot_info['uuid'] = parse_value(line)
+            elif line.startswith('CurrentSnapshotNode='):
+                snapshot_info['node'] = parse_value(line)
+
+        for line in output_list:
+            if line.startswith(snapshot_info['node'].replace('Name', 'Description')):
+                snapshot_info['description'] = parse_value(line)
+
+        return snapshot_info if snapshot_info else {}

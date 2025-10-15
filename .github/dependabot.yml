@@ -5,7 +5,7 @@
 
 version: 2
 updates:
-  - package-ecosystem: pip # See documentation for possible values
+  - package-ecosystem: "uv" # See documentation for possible values
     directory: "/" # Location of package manifests
     schedule:
       interval: daily
@@ -15,8 +15,3 @@ updates:
     allow:
       - dependency-type: direct
       - dependency-type: indirect
-  - package-ecosystem: gitsubmodule
-    directory: "/"
-    schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10

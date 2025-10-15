@@ -2,7 +2,7 @@
 name = "vboxwrapper"
 version = "0.1.0"
 description = ""
-authors = ["l02 <l8556@outlook.com>"]
+authors = [{ name = "l02", email = "l8556@outlook.com" }]
 readme = "README.md"
 repository='https://github.com/l8556/VBoxWrapper.git'
 requires-python = ">=3.12"

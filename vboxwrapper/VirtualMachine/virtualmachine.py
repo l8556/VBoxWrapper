@@ -3,6 +3,8 @@ import time
 from typing import Optional
 from rich.console import Console
 
+from .info import Info
+
 from ..commands import Commands
 from ..VMExceptions import VirtualMachinException
 
@@ -26,16 +28,9 @@ class VirtualMachine:
         :param vm_id: Virtual machine ID (name or uuid).
         """
         self.name = vm_id
-        self.snapshot = Snapshot(self.name)
+        self.info = Info(self.name)
+        self.snapshot = Snapshot(self.name, info=self.info)
         self.network = Network(self.name)
-
-    def get_group_name(self) -> Optional[str]:
-        """
-        Get the group name of the virtual machine.
-        :return: Group name of the virtual machine.
-        """
-        group_name = self.get_parameter('groups')
-        return group_name.strip().replace('/', '') if group_name else None
 
     def shutdown(self) -> None:
         self._cmd.call(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
@@ -137,18 +132,6 @@ class VirtualMachine:
             )
         status.stop() if status_bar else ...
 
-    def get_logged_user(self) -> Optional[str]:
-        """
-        Get the logged-in user.
-        :return: Logged-in user.
-        """
-        output = self._cmd.get_output(
-            f'{self._cmd.guestproperty} {self.name} "/VirtualBox/GuestInfo/OS/LoggedInUsersList"'
-        )
-        if output:
-            return output.split(':')[1].strip() if ':' in output else None
-        return None
-
     def run(self, headless: bool = False) -> None:
         """
         Start the virtual machine.
@@ -171,40 +154,6 @@ class VirtualMachine:
         print(f"[red]|INFO|{self.name}| Unable to determine virtual machine status")
         return False
 
-    def get_os_type(self) -> str:
-        """
-        Retrieve the operating system type of the virtual machine.
-
-        This method attempts to extract the operating system type using
-        the parameter '/VirtualBox/GuestInfo/OS/Product'. If the parameter
-        contains multiple parts separated by '@', it returns the first part
-        after stripping whitespace.
-
-        :return: The operating system type as a string, or None if unavailable.
-        """
-        return self.get_guest_property('/VirtualBox/GuestInfo/OS/Product')
-
-    def get_guest_property(self, parameter: str) -> str:
-        output = self._cmd.get_output(f'{self._cmd.guestproperty} {self.name} "{parameter}"')
-        if output and output != 'No value set!':
-            value = output.split(':', maxsplit=1)
-            return value[1].strip() if value and len(value) == 2 else ''
-        return ''
-
-    def get_parameter(self, parameter: str, machine_readable_info: bool = True) -> Optional[str]:
-        """
-        Get a specific parameter of the virtual machine.
-        :param parameter: Parameter to retrieve.
-        :param machine_readable_info: If True, retrieves detailed information in machine-readable format. False otherwise.
-        :return: Value of the parameter.
-        """
-        param_lower = parameter.lower()
-        for line in self.get_info(machine_readable=machine_readable_info).splitlines():
-            if line.lower().startswith(param_lower):
-                _, _, value = line.partition('=')
-                return value.replace('"', '').replace("'", '').strip()
-        return None
-
     def stop(self, wait_until_shutdown: bool = True) -> None:
         """
         Shutdown the virtual machine.
@@ -220,12 +169,17 @@ class VirtualMachine:
         if wait_until_shutdown:
             self.wait_until_shutdown()
 
-    def get_info(self, machine_readable: bool = False) -> str:
-        """
-        Get information about the virtual machine.
-        :param machine_readable: If True, retrieves detailed information in machine-readable format, False otherwise.
-        :return: Information about the virtual machine.
-        """
-        if machine_readable:
-            return self._cmd.get_output(f"{self._cmd.showvminfo} {self.name} --machinereadable")
-        return self._cmd.get_output(f'{self._cmd.enumerate} {self.name}')
+    def get_logged_user(self) -> Optional[str]:
+        return self.info.get_logged_user()
+
+    def get_os_type(self) -> str:
+        return self.info.get_os_type()
+
+    def get_parameter(self, *args, **kwargs) -> Optional[str]:
+        return self.info.get_parameter(*args, **kwargs)
+
+    def get_info(self, *args, **kwargs) -> str:
+        return self.info.get(*args, **kwargs)
+
+    def get_group_name(self) -> Optional[str]:
+        return self.info.get_group_name()

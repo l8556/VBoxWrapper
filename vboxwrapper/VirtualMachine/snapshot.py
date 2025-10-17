@@ -3,6 +3,7 @@ import time
 from rich.console import Console
 
 from ..commands import Commands
+from .info import Info
 
 console = Console()
 print = console.print
@@ -14,8 +15,9 @@ class Snapshot:
 
     _cmd = Commands()
 
-    def __init__(self, vm_id: str):
+    def __init__(self, vm_id: str, info: Info = None):
         self.name = vm_id
+        self.info = info or Info(self.name)
 
     def list(self) -> list:
         """
@@ -57,7 +59,21 @@ class Snapshot:
         """
         self._cmd.call(f"{self._cmd.snapshot} {self.name} take {name}")
 
+    def get_snapshots_info(self) -> list:
+        """
+        Get information about the snapshots.
+        :return: List of snapshot information.
+        """
+        return self.info.config_parser.get_snapshots_info()
+
     def get_current_snapshot_info(self) -> dict:
+        """
+        Get information about the current snapshot.
+        :return: Dictionary with snapshot information (name, uuid, description, timestamp).
+        """
+        return self.info.config_parser.get_current_snapshot_info()
+
+    def get_current_snapshot_info_by_command(self) -> dict:
         """
         Get information about the current snapshot.
         :return: Dictionary with snapshot information (name, uuid, description, timestamp).

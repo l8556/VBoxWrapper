@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from os.path import isfile, dirname
 from typing import Optional
-from ...commands import Commands
+
 from .config_parser import ConfigParser
+from ...commands import Commands
 
 
 class Info:
@@ -53,7 +54,8 @@ class Info:
 
         self.__config_path = cfg_path
 
-    def vm_dir(self) -> str:
+    @property
+    def vm_dir(self) -> Optional[str]:
         """
         Get the directory of the virtual machine.
         Works for both accessible and inaccessible VMs.

@@ -32,6 +32,10 @@ class VirtualMachine:
         self.snapshot = Snapshot(self.name, info=self.info)
         self.network = Network(self.name)
 
+    @property
+    def vm_dir(self) -> str:
+        return self.info.vm_dir
+
     def shutdown(self) -> None:
         self._cmd.call(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
 

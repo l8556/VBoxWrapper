@@ -35,7 +35,7 @@ class Info:
         Get the path to the virtual machine configuration .vbox file.
         :return: Path to the virtual machine configuration file.
         """
-        if self.__config_path is None or not isfile(self.__config_path):
+        if self.__config_path is None or not isfile(self.__config_path) and not self.is_inaccessible():
             self.update_config_path()
         return self.__config_path
 

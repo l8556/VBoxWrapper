@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from os.path import isfile
+from os.path import isfile, dirname
 from typing import Optional
 from ...commands import Commands
 from .config_parser import ConfigParser
@@ -35,8 +35,43 @@ class Info:
         :return: Path to the virtual machine configuration file.
         """
         if self.__config_path is None or not isfile(self.__config_path):
-            self.__config_path = self.get_parameter('CfgFile')
+            self.update_config_path()
         return self.__config_path
+
+    def update_config_path(self) -> None:
+        """
+        Get the path to the virtual machine configuration .vbox file.
+        This method attempts to get the path from showvminfo first, and if that fails
+        (e.g., for inaccessible VMs), it tries to extract it from the list command.
+        """
+        # Try to get the path from showvminfo (works for accessible VMs)
+        cfg_path = self.get_parameter('CfgFile')
+
+        if cfg_path is None:
+            # If showvminfo fails, try to get path for inaccessible VM
+            cfg_path = self._get_config_path_for_inaccessible()
+
+        self.__config_path = cfg_path
+
+    def vm_dir(self) -> str:
+        """
+        Get the directory of the virtual machine.
+        Works for both accessible and inaccessible VMs.
+        :return: Directory of the virtual machine.
+        """
+        cfg_path = self.config_path
+        if cfg_path:
+            return dirname(cfg_path)
+        return None
+
+    def is_inaccessible(self) -> bool:
+        """
+        Check if the virtual machine is inaccessible.
+        :return: True if the VM is inaccessible, False otherwise.
+        """
+        vm_state = self.get_parameter('VMState')
+        return vm_state is None or 'inaccessible' in vm_state.lower()
+
 
     def get(self, machine_readable: bool = False) -> str:
         """
@@ -47,13 +82,6 @@ class Info:
         if machine_readable:
             return self._cmd.get_output(f"{self._cmd.showvminfo} {self.name} --machinereadable")
         return self._cmd.get_output(f'{self._cmd.enumerate} {self.name}')
-
-    def get_config_path(self) -> str:
-        """
-        Get the path to the virtual machine configuration .vbox file.
-        :return: Path to the virtual machine configuration file.
-        """
-        return self.config_parser.get_config_path()
 
     def get_parameter(self, parameter: str, machine_readable_info: bool = True) -> Optional[str]:
         """
@@ -124,3 +152,37 @@ class Info:
         """
         group_name = self.get_parameter('groups')
         return group_name.strip().replace('/', '') if group_name else None
+
+    def _get_config_path_for_inaccessible(self) -> Optional[str]:
+        """
+        Get the config file path for an inaccessible VM.
+        This method parses the output of 'vboxmanage list -l vms' to find
+        the config file path for inaccessible VMs.
+        :return: Path to the config file or None if not found.
+        """
+        output = self._cmd.get_output(f'{self._cmd.vboxmanage} list -l vms')
+
+        lines = output.splitlines()
+        vm_found = False
+
+        for i, line in enumerate(lines):
+            # Check if this is our VM (by name or UUID)
+            if line.startswith('Name:') and self.name in line:
+                vm_found = True
+            elif line.startswith('UUID:') and self.name in line:
+                vm_found = True
+            # Also check by config file path (useful when VM name is <inaccessible>)
+            elif line.startswith('Config file:') and self.name in line:
+                _, _, path = line.partition(':')
+                return path.strip()
+
+            # If we found our VM, look for the Config file line
+            if vm_found and line.startswith('Config file:'):
+                _, _, path = line.partition(':')
+                return path.strip()
+
+            # Reset if we've moved to a new VM entry (detected by another Name: line that doesn't match)
+            if vm_found and line.startswith('Name:') and self.name not in line:
+                vm_found = False
+
+        return None

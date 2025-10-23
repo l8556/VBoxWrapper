@@ -10,6 +10,7 @@ from ..VMExceptions import VirtualMachinException
 
 from .network import Network
 from .snapshot import Snapshot
+from .usb import USB
 
 console = Console()
 print = console.print
@@ -31,6 +32,7 @@ class VirtualMachine:
         self.info = Info(self.name)
         self.snapshot = Snapshot(self.name, info=self.info)
         self.network = Network(self.name)
+        self.usb = USB(self.name)
 
     @property
     def vm_dir(self) -> str:

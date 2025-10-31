@@ -2,7 +2,7 @@
 from os.path import isfile, dirname
 from typing import Optional
 
-from .config_parser import ConfigParser
+from .vm_config import ConfigParser, ConfigEditor
 from ...commands import Commands
 
 
@@ -16,6 +16,7 @@ class Info:
         self.name = vm_id
         self.__config_parser = None
         self.__config_path = None
+        self.__config_editor = None
 
     @property
     def config_parser(self) -> ConfigParser:
@@ -28,6 +29,18 @@ class Info:
                 raise ValueError("Config path is not found")
             self.__config_parser = ConfigParser(self.config_path)
         return self.__config_parser
+
+    @property
+    def config_editor(self) -> ConfigEditor:
+        """
+        Get the config editor for the virtual machine configuration .vbox file.
+        :return: Config editor for the virtual machine configuration .vbox file.
+        """
+        if self.__config_editor is None:
+            if self.config_path is None:
+                raise ValueError("Config path is not found")
+            self.__config_editor = ConfigEditor(self.config_path)
+        return self.__config_editor
 
     @property
     def config_path(self) -> str:

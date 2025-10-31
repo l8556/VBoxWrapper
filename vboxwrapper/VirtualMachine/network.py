@@ -3,6 +3,7 @@ import time
 from contextlib import nullcontext
 
 from ..VMExceptions import VirtualMachinException
+from .info import Info
 from ..commands import Commands
 from rich.console import Console
 
@@ -17,8 +18,9 @@ class Network:
 
     _cmd = Commands()
 
-    def __init__(self, vm_id: str):
-        self.name = vm_id
+    def __init__(self, info: Info):
+        self.info = info
+        self.name = info.name
 
     def set_adapter(
             self,

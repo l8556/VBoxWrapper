@@ -3,7 +3,7 @@ import time
 from typing import Optional
 from rich.console import Console
 
-from .info import Info
+from .info import Info, ConfigEditor
 
 from ..commands import Commands
 from ..VMExceptions import VirtualMachinException
@@ -33,6 +33,10 @@ class VirtualMachine:
         self.snapshot = Snapshot(self.name, info=self.info)
         self.network = Network(self.name)
         self.usb = USB(self.name)
+
+    @property
+    def config_editor(self) -> ConfigEditor:
+        return self.info.config_editor
 
     @property
     def vm_dir(self) -> str:

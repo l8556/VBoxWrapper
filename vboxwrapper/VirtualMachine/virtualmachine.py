@@ -11,6 +11,7 @@ from ..VMExceptions import VirtualMachinException
 from .network import Network
 from .snapshot import Snapshot
 from .usb import USB
+from .storage import Storage
 
 console = Console()
 print = console.print
@@ -30,9 +31,10 @@ class VirtualMachine:
         """
         self.name = vm_id
         self.info = Info(self.name)
-        self.snapshot = Snapshot(self.name, info=self.info)
-        self.network = Network(self.name)
-        self.usb = USB(self.name)
+        self.snapshot = Snapshot(self.info)
+        self.storage = Storage(self.info)
+        self.network = Network(self.info)
+        self.usb = USB(self.info)
 
     @property
     def config_editor(self) -> ConfigEditor:

@@ -15,9 +15,9 @@ class Snapshot:
 
     _cmd = Commands()
 
-    def __init__(self, vm_id: str, info: Info = None):
-        self.name = vm_id
-        self.info = info or Info(self.name)
+    def __init__(self, info: Info):
+        self.info = info
+        self.name = info.name
 
     def list(self) -> list:
         """

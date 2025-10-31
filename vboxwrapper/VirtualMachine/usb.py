@@ -2,7 +2,7 @@
 from rich.console import Console
 
 from ..commands import Commands
-
+from .info import Info
 console = Console()
 print = console.print
 
@@ -14,12 +14,13 @@ class USB:
 
     _cmd = Commands()
 
-    def __init__(self, vm_id: str):
+    def __init__(self, info: Info):
         """
         Initialize USB controller manager.
         :param vm_id: Virtual machine ID (name or uuid).
         """
-        self.name = vm_id
+        self.info = info
+        self.name = info.name
 
     def controller(self, turn: bool) -> None:
         """

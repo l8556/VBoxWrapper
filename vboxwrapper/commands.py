@@ -34,6 +34,7 @@ class Commands:
     wait: str = f"{vboxmanage} guestproperty wait"
     enumerate: str = f"{vboxmanage} guestproperty enumerate"
     guestcontrol: str = f"{vboxmanage} guestcontrol"
+    registervm: str = f"{vboxmanage} registervm"
 
     @staticmethod
     def get_output(command: str) -> str:

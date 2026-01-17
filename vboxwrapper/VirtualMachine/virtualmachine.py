@@ -195,3 +195,27 @@ class VirtualMachine:
 
     def get_group_name(self) -> Optional[str]:
         return self.info.get_group_name()
+
+    def is_registered(self) -> bool:
+        """
+        Check if the current virtual machine is registered in VirtualBox.
+        :return: True if the virtual machine is registered, False otherwise.
+        """
+        vm_list_output = self._cmd.get_output(self._cmd.list)
+        for line in vm_list_output.split('\n'):
+            if self.name in line:
+                return True
+        return False
+
+    @staticmethod
+    def register(vbox_file_path: str) -> None:
+        """
+        Register a virtual machine in VirtualBox from .vbox file.
+        :param vbox_file_path: Path to the .vbox file.
+        """
+        cmd = Commands()
+        result = cmd.call(f'{cmd.registervm} "{vbox_file_path}"')
+        if result == 0:
+            print(f"[green]|INFO| Virtual machine registered successfully: {vbox_file_path}")
+        else:
+            raise VirtualMachinException(f"[red]|ERROR| Failed to register virtual machine: {vbox_file_path}")

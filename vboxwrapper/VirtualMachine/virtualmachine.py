@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import time
+import os
+import shutil
 from typing import Optional
 from rich.console import Console
 
@@ -221,23 +223,74 @@ class VirtualMachine:
         else:
             print(f"[cyan]|INFO|{self.name}| Virtual machine already is registered: {self.info.config_path}")
 
-    def move_to(self, dir: str) -> None:
+    def move_to(self, dir: str, move_remaining_files: bool = False, delete_old_directory: bool = False) -> None:
         """
         Move virtual machine to another directory.
         The VM must be powered off before moving.
-        :param target_directory: Target directory path where VM will be moved.
+        Checks if all files were moved and moves remaining files if needed.
+        :param dir: Target directory path where VM will be moved.
+        :param move_remaining_files: If True, automatically moves remaining files from old directory.
+        :param delete_old_directory: If True, deletes old directory after moving (only if empty or after moving files).
         """
         if self.power_status():
             raise VirtualMachinException(
                 f"[red]|ERROR|{self.name}| Virtual machine must be powered off before moving"
             )
 
+        old_vm_dir = self.vm_dir
+        print(f"[cyan]|INFO|{self.name}| Old directory: {old_vm_dir}")
         print(f"[cyan]|INFO|{self.name}| Moving virtual machine to {dir}")
-        result = self._cmd.call(f'{self._cmd.movevm} {self.name} --folder "{dir}"')
 
-        if result == 0:
-            print(f"[green]|INFO|{self.name}| Virtual machine moved successfully to {dir}")
-        else:
+        result = self._cmd.call(f'{self._cmd.movevm} {self.name} --folder "{dir}"')
+        if result != 0:
             raise VirtualMachinException(
                 f"[red]|ERROR|{self.name}| Failed to move virtual machine to {dir}"
             )
+        print(f"[green]|INFO|{self.name}| Virtual machine moved successfully to {dir}")
+
+        self.info.update_config_path()
+        new_vm_dir = self.vm_dir
+        print(f"[cyan]|INFO|{self.name}| New directory: {new_vm_dir}")
+        if os.path.exists(old_vm_dir):
+            remaining_files = os.listdir(old_vm_dir)
+            if remaining_files:
+                print(f"[yellow]|WARNING|{self.name}| Found {len(remaining_files)} remaining files in old directory")
+
+                if move_remaining_files:
+                    print(f"[cyan]|INFO|{self.name}| Moving remaining files from {old_vm_dir} to {new_vm_dir}")
+
+                    for item in remaining_files:
+                        old_path = os.path.join(old_vm_dir, item)
+                        new_path = os.path.join(new_vm_dir, item)
+
+                        try:
+                            if os.path.isdir(old_path):
+                                shutil.copytree(old_path, new_path, dirs_exist_ok=True)
+                                shutil.rmtree(old_path)
+                                print(f"[green]|INFO|{self.name}| Moved directory: {item}")
+                            else:
+                                shutil.move(old_path, new_path)
+                                print(f"[green]|INFO|{self.name}| Moved file: {item}")
+                        except Exception as e:
+                            print(f"[yellow]|WARNING|{self.name}| Could not move {item}: {e}")
+
+                    if delete_old_directory:
+                        try:
+                            if not os.listdir(old_vm_dir):
+                                os.rmdir(old_vm_dir)
+                                print(f"[green]|INFO|{self.name}| Removed empty old directory")
+                            else:
+                                print(f"[yellow]|WARNING|{self.name}| Old directory is not empty, cannot delete")
+                        except Exception as e:
+                            print(f"[yellow]|WARNING|{self.name}| Could not remove old directory: {e}")
+                else:
+                    print(f"[yellow]|WARNING|{self.name}| Remaining files were not moved (move_remaining_files=False)")
+            else:
+                if delete_old_directory:
+                    try:
+                        os.rmdir(old_vm_dir)
+                        print(f"[green]|INFO|{self.name}| Removed empty old directory")
+                    except Exception as e:
+                        print(f"[yellow]|WARNING|{self.name}| Could not remove old directory: {e}")
+                else:
+                    print(f"[cyan]|INFO|{self.name}| Old directory is empty but was not deleted (delete_old_directory=False)")

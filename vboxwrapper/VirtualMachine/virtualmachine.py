@@ -207,15 +207,37 @@ class VirtualMachine:
                 return True
         return False
 
-    @staticmethod
-    def register(vbox_file_path: str) -> None:
+    def register(self, vbox_file_path: str) -> None:
         """
         Register a virtual machine in VirtualBox from .vbox file.
         :param vbox_file_path: Path to the .vbox file.
         """
-        cmd = Commands()
-        result = cmd.call(f'{cmd.registervm} "{vbox_file_path}"')
-        if result == 0:
-            print(f"[green]|INFO| Virtual machine registered successfully: {vbox_file_path}")
+        if not self.is_registered():
+            result = self._cmd.call(f'{self._cmd.registervm} "{vbox_file_path}"')
+            if result == 0:
+                print(f"[green]|INFO|{self.name}| Virtual machine registered successfully: {vbox_file_path}")
+            else:
+                raise VirtualMachinException(f"[red]|ERROR|{self.name}| Failed to register virtual machine: {vbox_file_path}")
         else:
-            raise VirtualMachinException(f"[red]|ERROR| Failed to register virtual machine: {vbox_file_path}")
+            print(f"[cyan]|INFO|{self.name}| Virtual machine already is registered: {self.info.config_path}")
+
+    def move_to(self, dir: str) -> None:
+        """
+        Move virtual machine to another directory.
+        The VM must be powered off before moving.
+        :param target_directory: Target directory path where VM will be moved.
+        """
+        if self.power_status():
+            raise VirtualMachinException(
+                f"[red]|ERROR|{self.name}| Virtual machine must be powered off before moving"
+            )
+
+        print(f"[cyan]|INFO|{self.name}| Moving virtual machine to {dir}")
+        result = self._cmd.call(f'{self._cmd.movevm} {self.name} --folder "{dir}"')
+
+        if result == 0:
+            print(f"[green]|INFO|{self.name}| Virtual machine moved successfully to {dir}")
+        else:
+            raise VirtualMachinException(
+                f"[red]|ERROR|{self.name}| Failed to move virtual machine to {dir}"
+            )

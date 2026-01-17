@@ -35,6 +35,7 @@ class Commands:
     enumerate: str = f"{vboxmanage} guestproperty enumerate"
     guestcontrol: str = f"{vboxmanage} guestcontrol"
     registervm: str = f"{vboxmanage} registervm"
+    movevm: str = f"{vboxmanage} movevm"
 
     @staticmethod
     def get_output(command: str) -> str:

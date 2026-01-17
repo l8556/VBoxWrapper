@@ -22,6 +22,7 @@ def singleton(class_):
 @dataclass(frozen=True)
 class Commands:
     vboxmanage: str = 'vboxmanage'
+    systemproperties: str = f"{vboxmanage} list systemproperties"
     list: str = f"{vboxmanage} list vms"
     group_list: str = f"{vboxmanage} list groups"
     snapshot: str = f"{vboxmanage} snapshot"

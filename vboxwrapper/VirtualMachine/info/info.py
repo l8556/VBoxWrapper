@@ -17,6 +17,17 @@ class Info:
         self.__config_parser = None
         self.__config_path = None
         self.__config_editor = None
+        self.__default_vm_dir = None
+
+    @property
+    def default_vm_dir(self) -> Optional[str]:
+        """
+        Get the default machine folder from VirtualBox system properties.
+        :return: Path to the default machine folder or None if not found.
+        """
+        if self.__default_vm_dir is None:
+            self.__default_vm_dir = self.get_default_machine_folder()
+        return self.__default_vm_dir
 
     @property
     def config_parser(self) -> ConfigParser:
@@ -167,6 +178,21 @@ class Info:
         """
         group_name = self.get_parameter('groups')
         return group_name.strip().replace('/', '') if group_name else None
+
+    @classmethod
+    def get_default_machine_folder(cls) -> Optional[str]:
+        """
+        Get the default machine folder from VirtualBox system properties.
+        This is the folder where new VMs are created by default.
+        :return: Path to the default machine folder or None if not found.
+        """
+        output = cls._cmd.get_output(cls._cmd.systemproperties)
+
+        for line in output.splitlines():
+            if line.startswith('Default machine folder:'):
+                _, _, path = line.partition(':')
+                return path.strip()
+        return None
 
     def _get_config_path_for_inaccessible(self) -> Optional[str]:
         """

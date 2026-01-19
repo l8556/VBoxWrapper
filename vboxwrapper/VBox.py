@@ -74,3 +74,15 @@ class Vbox:
         raise VboxException(
             f"[red]|ERROR| The group name {group_name} does not exist. Existing groups:\n{existing_names}"
         )
+
+    def is_vm_registered(self, vm_name_or_uuid: str) -> bool:
+        """
+        Check if virtual machine is registered in VirtualBox.
+        :param vm_name_or_uuid: Virtual machine name or UUID.
+        :return: True if the virtual machine is registered, False otherwise.
+        """
+        vm_list = self.vm_list()
+        for vm_name, vm_uuid in vm_list:
+            if vm_name_or_uuid in (vm_name, vm_uuid):
+                return True
+        return False

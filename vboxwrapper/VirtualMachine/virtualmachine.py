@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 import time
+import os
+import shutil
 from typing import Optional
 from rich.console import Console
 
-from .info import Info
+from .info import Info, ConfigEditor
 
 from ..commands import Commands
 from ..VMExceptions import VirtualMachinException
 
 from .network import Network
 from .snapshot import Snapshot
+from .usb import USB
+from .storage import Storage
 
 console = Console()
 print = console.print
@@ -29,8 +33,14 @@ class VirtualMachine:
         """
         self.name = vm_id
         self.info = Info(self.name)
-        self.snapshot = Snapshot(self.name, info=self.info)
-        self.network = Network(self.name)
+        self.snapshot = Snapshot(self.info)
+        self.storage = Storage(self.info)
+        self.network = Network(self.info)
+        self.usb = USB(self.info)
+
+    @property
+    def config_editor(self) -> ConfigEditor:
+        return self.info.config_editor
 
     @property
     def vm_dir(self) -> str:
@@ -187,3 +197,100 @@ class VirtualMachine:
 
     def get_group_name(self) -> Optional[str]:
         return self.info.get_group_name()
+
+    def is_registered(self) -> bool:
+        """
+        Check if the current virtual machine is registered in VirtualBox.
+        :return: True if the virtual machine is registered, False otherwise.
+        """
+        vm_list_output = self._cmd.get_output(self._cmd.list)
+        for line in vm_list_output.split('\n'):
+            if self.name in line:
+                return True
+        return False
+
+    def register(self, vbox_file_path: str) -> None:
+        """
+        Register a virtual machine in VirtualBox from .vbox file.
+        :param vbox_file_path: Path to the .vbox file.
+        """
+        if not self.is_registered():
+            result = self._cmd.call(f'{self._cmd.registervm} "{vbox_file_path}"')
+            if result == 0:
+                print(f"[green]|INFO|{self.name}| Virtual machine registered successfully: {vbox_file_path}")
+            else:
+                raise VirtualMachinException(f"[red]|ERROR|{self.name}| Failed to register virtual machine: {vbox_file_path}")
+        else:
+            print(f"[cyan]|INFO|{self.name}| Virtual machine already is registered: {self.info.config_path}")
+
+    def move_to(self, dir: str, move_remaining_files: bool = False, delete_old_directory: bool = False) -> None:
+        """
+        Move virtual machine to another directory.
+        The VM must be powered off before moving.
+        Checks if all files were moved and moves remaining files if needed.
+        :param dir: Target directory path where VM will be moved.
+        :param move_remaining_files: If True, automatically moves remaining files from old directory.
+        :param delete_old_directory: If True, deletes old directory after moving (only if empty or after moving files).
+        """
+        if self.power_status():
+            raise VirtualMachinException(
+                f"[red]|ERROR|{self.name}| Virtual machine must be powered off before moving"
+            )
+
+        old_vm_dir = self.vm_dir
+        print(f"[cyan]|INFO|{self.name}| Old directory: {old_vm_dir}")
+        print(f"[cyan]|INFO|{self.name}| Moving virtual machine to {dir}")
+
+        result = self._cmd.call(f'{self._cmd.movevm} {self.name} --folder "{dir}"')
+        if result != 0:
+            raise VirtualMachinException(
+                f"[red]|ERROR|{self.name}| Failed to move virtual machine to {dir}"
+            )
+        print(f"[green]|INFO|{self.name}| Virtual machine moved successfully to {dir}")
+
+        self.info.update_config_path()
+        new_vm_dir = self.vm_dir
+        print(f"[cyan]|INFO|{self.name}| New directory: {new_vm_dir}")
+        if os.path.exists(old_vm_dir):
+            remaining_files = os.listdir(old_vm_dir)
+            if remaining_files:
+                print(f"[yellow]|WARNING|{self.name}| Found {len(remaining_files)} remaining files in old directory")
+
+                if move_remaining_files:
+                    print(f"[cyan]|INFO|{self.name}| Moving remaining files from {old_vm_dir} to {new_vm_dir}")
+
+                    for item in remaining_files:
+                        old_path = os.path.join(old_vm_dir, item)
+                        new_path = os.path.join(new_vm_dir, item)
+
+                        try:
+                            if os.path.isdir(old_path):
+                                shutil.copytree(old_path, new_path, dirs_exist_ok=True)
+                                shutil.rmtree(old_path)
+                                print(f"[green]|INFO|{self.name}| Moved directory: {item}")
+                            else:
+                                shutil.move(old_path, new_path)
+                                print(f"[green]|INFO|{self.name}| Moved file: {item}")
+                        except Exception as e:
+                            print(f"[yellow]|WARNING|{self.name}| Could not move {item}: {e}")
+
+                    if delete_old_directory:
+                        try:
+                            if not os.listdir(old_vm_dir):
+                                os.rmdir(old_vm_dir)
+                                print(f"[green]|INFO|{self.name}| Removed empty old directory")
+                            else:
+                                print(f"[yellow]|WARNING|{self.name}| Old directory is not empty, cannot delete")
+                        except Exception as e:
+                            print(f"[yellow]|WARNING|{self.name}| Could not remove old directory: {e}")
+                else:
+                    print(f"[yellow]|WARNING|{self.name}| Remaining files were not moved (move_remaining_files=False)")
+            else:
+                if delete_old_directory:
+                    try:
+                        os.rmdir(old_vm_dir)
+                        print(f"[green]|INFO|{self.name}| Removed empty old directory")
+                    except Exception as e:
+                        print(f"[yellow]|WARNING|{self.name}| Could not remove old directory: {e}")
+                else:
+                    print(f"[cyan]|INFO|{self.name}| Old directory is empty but was not deleted (delete_old_directory=False)")

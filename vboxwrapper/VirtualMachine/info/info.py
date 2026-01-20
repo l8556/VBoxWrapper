@@ -12,12 +12,13 @@ class Info:
     """
     _cmd = Commands()
 
-    def __init__(self, vm_id: str):
+    def __init__(self, vm_id: str, config_path: str = None):
         self.name = vm_id
         self.__config_parser = None
         self.__config_path = None
         self.__config_editor = None
         self.__default_vm_dir = None
+        self.config_path = config_path
 
     @property
     def default_vm_dir(self) -> Optional[str]:
@@ -62,6 +63,16 @@ class Info:
         if self.__config_path is None or not isfile(self.__config_path) and not self.is_inaccessible():
             self.update_config_path()
         return self.__config_path
+
+    @config_path.setter
+    def config_path(self, config_path: Optional[str]) -> None:
+        """
+        Set the path to the virtual machine configuration .vbox file.
+        :param config_path: Path to the virtual machine configuration file.
+        """
+        if config_path and not isfile(config_path):
+            raise ValueError("Config path is not a file")
+        self.__config_path = config_path
 
     def update_config_path(self) -> None:
         """

@@ -20,7 +20,10 @@ class USB:
         :param vm_id: Virtual machine ID (name or uuid).
         """
         self.info = info
-        self.name = info.name
+
+    @property
+    def name(self) -> str:
+        return self.info.name
 
     def controller(self, turn: bool) -> None:
         """

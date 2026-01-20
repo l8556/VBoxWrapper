@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from os.path import isfile, dirname
 from typing import Optional
 
@@ -11,13 +12,48 @@ class Info:
     Class to get information about the virtual machine.
     """
     _cmd = Commands()
+    _UUID_PATTERN = re.compile(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    )
 
-    def __init__(self, vm_id: str):
-        self.name = vm_id
+    def __init__(self, vm_id: str, config_path: str = None):
+        self.__vm_id = vm_id
+        self.__vm_id_is_uuid = self._is_uuid(vm_id)
+        self.__name = None
+        self.__uuid = None
         self.__config_parser = None
         self.__config_path = None
         self.__config_editor = None
         self.__default_vm_dir = None
+        self.config_path = config_path
+
+    @property
+    def name(self) -> Optional[str]:
+        """
+        Get the name of the virtual machine.
+        Lazily resolved on first access.
+        :return: Name of the virtual machine.
+        """
+        if self.__name is None:
+            if self.__vm_id_is_uuid:
+                self.__name = self._get_name_by_uuid(self.__vm_id)
+            else:
+                self.__name = self.__vm_id
+        return self.__name
+
+    @property
+    def uuid(self) -> Optional[str]:
+        """
+        Get the UUID of the virtual machine.
+        Lazily resolved on first access.
+        :return: UUID of the virtual machine.
+        """
+        if self.__uuid is None:
+            if self.__vm_id_is_uuid:
+                self.__uuid = self.__vm_id
+            else:
+                self.__uuid = self._get_uuid_by_name(self.__vm_id)
+        return self.__uuid
 
     @property
     def default_vm_dir(self) -> Optional[str]:
@@ -62,6 +98,16 @@ class Info:
         if self.__config_path is None or not isfile(self.__config_path) and not self.is_inaccessible():
             self.update_config_path()
         return self.__config_path
+
+    @config_path.setter
+    def config_path(self, config_path: Optional[str]) -> None:
+        """
+        Set the path to the virtual machine configuration .vbox file.
+        :param config_path: Path to the virtual machine configuration file.
+        """
+        if config_path and not isfile(config_path):
+            raise ValueError("Config path is not a file")
+        self.__config_path = config_path
 
     def update_config_path(self) -> None:
         """
@@ -194,6 +240,41 @@ class Info:
                 return path.strip()
         return None
 
+    def _get_name_by_uuid(self, uuid: str) -> Optional[str]:
+        """
+        Get VM name by its UUID.
+        :param uuid: UUID of the virtual machine.
+        :return: Name of the virtual machine or None if not found.
+        """
+        output = self._cmd.get_output(f'{self._cmd.showvminfo} {uuid} --machinereadable')
+        for line in output.splitlines():
+            if line.lower().startswith('name='):
+                _, _, value = line.partition('=')
+                return value.replace('"', '').replace("'", '').strip()
+        return None
+
+    def _get_uuid_by_name(self, name: str) -> Optional[str]:
+        """
+        Get VM UUID by its name.
+        :param name: Name of the virtual machine.
+        :return: UUID of the virtual machine or None if not found.
+        """
+        output = self._cmd.get_output(f'{self._cmd.showvminfo} "{name}" --machinereadable')
+        for line in output.splitlines():
+            if line.lower().startswith('uuid='):
+                _, _, value = line.partition('=')
+                return value.replace('"', '').replace("'", '').strip()
+        return None
+
+    @classmethod
+    def _is_uuid(cls, value: str) -> bool:
+        """
+        Check if the given value is a valid UUID format.
+        :param value: String to check.
+        :return: True if valid UUID format, False otherwise.
+        """
+        return bool(cls._UUID_PATTERN.match(value))
+
     def _get_config_path_for_inaccessible(self) -> Optional[str]:
         """
         Get the config file path for an inaccessible VM.
@@ -208,22 +289,22 @@ class Info:
 
         for i, line in enumerate(lines):
             # Check if this is our VM (by name or UUID)
-            if line.startswith('Name:') and self.name in line:
-                vm_found = True
-            elif line.startswith('UUID:') and self.name in line:
-                vm_found = True
-            # Also check by config file path (useful when VM name is <inaccessible>)
-            elif line.startswith('Config file:') and self.name in line:
-                _, _, path = line.partition(':')
-                return path.strip()
+            if line.startswith('Name:'):
+                # Extract exact VM name after "Name:" prefix
+                vm_name = line.partition(':')[2].strip()
+                if vm_name == self.name:
+                    vm_found = True
+                elif vm_found:
+                    # We've moved to a new VM entry, reset
+                    vm_found = False
+            elif line.startswith('UUID:'):
+                uuid = line.partition(':')[2].strip()
+                if uuid == self.name:
+                    vm_found = True
 
             # If we found our VM, look for the Config file line
             if vm_found and line.startswith('Config file:'):
                 _, _, path = line.partition(':')
                 return path.strip()
-
-            # Reset if we've moved to a new VM entry (detected by another Name: line that doesn't match)
-            if vm_found and line.startswith('Name:') and self.name not in line:
-                vm_found = False
 
         return None

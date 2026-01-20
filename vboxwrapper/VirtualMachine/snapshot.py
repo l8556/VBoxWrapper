@@ -17,7 +17,10 @@ class Snapshot:
 
     def __init__(self, info: Info):
         self.info = info
-        self.name = info.name
+
+    @property
+    def name(self) -> str:
+        return self.info.name
 
     def list(self) -> list:
         """

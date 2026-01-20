@@ -13,7 +13,10 @@ class Storage:
 
     def __init__(self, info: Info):
         self.info = info
-        self.name = info.name
+
+    @property
+    def name(self) -> str:
+        return self.info.name
 
     @property
     def config_parser(self) -> ConfigParser:

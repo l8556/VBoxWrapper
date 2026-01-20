@@ -26,13 +26,14 @@ class VirtualMachine:
 
     _cmd = Commands()
 
-    def __init__(self, vm_id: str):
+    def __init__(self, vm_id: str, config_path: str = None):
         """
         Initialize VirtualMachine with the virtual machine ID.
         :param vm_id: Virtual machine ID (name or uuid).
+        :param config_path: Path to the virtual machine configuration file.
         """
         self.name = vm_id
-        self.info = Info(self.name)
+        self.info = Info(self.name, config_path=config_path)
         self.snapshot = Snapshot(self.info)
         self.storage = Storage(self.info)
         self.network = Network(self.info)

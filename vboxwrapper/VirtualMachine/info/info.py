@@ -219,22 +219,22 @@ class Info:
 
         for i, line in enumerate(lines):
             # Check if this is our VM (by name or UUID)
-            if line.startswith('Name:') and self.name in line:
-                vm_found = True
-            elif line.startswith('UUID:') and self.name in line:
-                vm_found = True
-            # Also check by config file path (useful when VM name is <inaccessible>)
-            elif line.startswith('Config file:') and self.name in line:
-                _, _, path = line.partition(':')
-                return path.strip()
+            if line.startswith('Name:'):
+                # Extract exact VM name after "Name:" prefix
+                vm_name = line.partition(':')[2].strip()
+                if vm_name == self.name:
+                    vm_found = True
+                elif vm_found:
+                    # We've moved to a new VM entry, reset
+                    vm_found = False
+            elif line.startswith('UUID:'):
+                uuid = line.partition(':')[2].strip()
+                if uuid == self.name:
+                    vm_found = True
 
             # If we found our VM, look for the Config file line
             if vm_found and line.startswith('Config file:'):
                 _, _, path = line.partition(':')
                 return path.strip()
-
-            # Reset if we've moved to a new VM entry (detected by another Name: line that doesn't match)
-            if vm_found and line.startswith('Name:') and self.name not in line:
-                vm_found = False
 
         return None

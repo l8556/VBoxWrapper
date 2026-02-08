@@ -53,9 +53,9 @@ class Network:
         )
 
         print(
-            f'[green]|INFO| Network adapter is turn [cyan]{"on" if turn else "off"}[/] '
+            f'[green]|INFO| Network adapter [cyan]{adapter_number}[/] is turn [cyan]{"on" if turn else "off"}[/] '
             f'{f"in [cyan]{connect_type.lower()}[/] mode" if turn else ""}'
-            f'{f"adapter name: [cyan]{_adapter_name}[/]" if _adapter_name else ""}'.strip()
+            f'{f" adapter name: [cyan]{_adapter_name}[/]" if _adapter_name else ""}'.strip()
         )
 
     def get_bridged_interfaces(self) -> list[dict]:

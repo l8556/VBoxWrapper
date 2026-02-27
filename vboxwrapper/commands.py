@@ -54,6 +54,8 @@ class Commands:
             max_stdout_lines: int = 20,
             stdout_color: str = None,
             stderr_color: str = 'red',
+            encoding: str = 'utf-8',
+            errors: str = 'replace'
     ) -> CompletedProcess:
         """
         Executes a shell command and returns a `CompletedProcess` object containing the results.
@@ -65,6 +67,8 @@ class Commands:
         :param max_stdout_lines: The maximum number of lines to retain and display in the status bar. Defaults to 20.
         :param stdout_color: Color for the standard output text when printed (Rich markup). Defaults to None.
         :param stderr_color: Color for the standard error text when printed (Rich markup). Defaults to 'red'.
+        :param encoding: Encoding for the subprocess output. Defaults to 'utf-8'.
+        :param errors: Error handling for encoding issues. Defaults to 'replace'.
         :return: A `CompletedProcess` object containing the command, return code, stdout, and stderr.
         """
 
@@ -77,7 +81,9 @@ class Commands:
                 stdout=PIPE,
                 stderr=PIPE,
                 text=True,
-                shell=True
+                shell=True,
+                encoding=encoding,
+                errors=errors
         ) as process:
             _stdout = []
             _stderr = []

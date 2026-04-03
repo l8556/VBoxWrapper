@@ -15,6 +15,10 @@ class Network:
     """
     Class for managing the virtual machine network.
     """
+    _NAT = 'nat'
+    _BRIDGED = 'bridged'
+    _INTNET = 'intnet'
+    _HOSTONLY = 'hostonly'
 
     _cmd = Commands()
 
@@ -39,13 +43,18 @@ class Network:
         :param connect_type: Connection type nat, bridged, intnet, hostonly (default: 'nat').
         :param adapter_name: Name of the adapter (default: None).
         """
-        if connect_type.lower() not in ['nat', 'bridged', 'intnet', 'hostonly']:
+        _connect_type = connect_type.lower()
+        if _connect_type not in [self._NAT, self._BRIDGED, self._INTNET, self._HOSTONLY]:
             raise VirtualMachinException(
                 f"[red]|ERROR| Please enter correct connection type: nat, bridged, intnet, hostonly"
             )
 
-        _adapter_name = f"--bridgeadapter{adapter_number} \"{adapter_name}\"" \
-            if adapter_name and turn and connect_type.lower() == 'bridged' else ''
+        _adapter_name_flag = {
+            self._BRIDGED: f'--bridgeadapter{adapter_number}',
+            self._HOSTONLY: f'--hostonlyadapter{adapter_number}',
+        }
+        _adapter_name = f"{_adapter_name_flag[_connect_type]} \"{adapter_name}\"" \
+            if adapter_name and turn and _connect_type in _adapter_name_flag else ''
 
         self._cmd.call(
             f"{self._cmd.modifyvm} {self.name} "

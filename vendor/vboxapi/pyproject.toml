@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "vboxapi_backend"
+backend-path = ["."]
+
+[project]
+name = "vboxapi"
+version = "1.0"
+description = "VirtualBox Python bindings built from the locally installed VirtualBox SDK"
+requires-python = ">=3.12"
+dependencies = [
+    "packaging",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Rebuild when the backend or the VirtualBox location changes; after a VirtualBox upgrade
+# run `uv sync --reinstall-package vboxapi` to pick up the new bindings.
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "vboxapi_backend.py" },
+    { env = "VBOX_MSI_INSTALL_PATH" },
+]

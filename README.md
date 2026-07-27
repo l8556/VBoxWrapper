@@ -33,6 +33,22 @@ cd VBoxWrapper
 pip install .
 ```
 
+### Development environment with uv
+
+```bash
+uv sync
+```
+
+Along with the regular dependencies `uv sync` builds and installs `vboxapi`,
+the VirtualBox Python bindings. They are not published on PyPI, so
+`vendor/vboxapi` builds them from the SDK of the VirtualBox installation
+found on the machine (or the one pointed to by `VBOX_MSI_INSTALL_PATH`
+or `VBOX_INSTALL_PATH`). After upgrading VirtualBox refresh the bindings:
+
+```bash
+uv sync --reinstall-package vboxapi
+```
+
 ## Quick Start
 
 ```python

@@ -23,3 +23,15 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/l8556/VBoxWrapper.git"
+
+# The VirtualBox API bindings are not published on PyPI, they are built from the SDK of the
+# locally installed VirtualBox. Keeping them in a group leaves `pip install .` usable on hosts
+# without VirtualBox, while `uv sync` installs them automatically.
+[dependency-groups]
+vboxapi = ["vboxapi"]
+
+[tool.uv]
+default-groups = ["vboxapi"]
+
+[tool.uv.sources]
+vboxapi = { path = "vendor/vboxapi" }

@@ -1,3 +1,6 @@
+# vboxapi sources copied from the local VirtualBox SDK at build time
+vendor/vboxapi/src/
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/

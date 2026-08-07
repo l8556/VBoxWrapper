@@ -94,15 +94,11 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "rich" },
-]
-
-[package.dev-dependencies]
-vboxapi = [
     { name = "vboxapi" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "rich", specifier = ">=15.0.0" }]
-
-[package.metadata.requires-dev]
-vboxapi = [{ name = "vboxapi", directory = "vendor/vboxapi" }]
+requires-dist = [
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "vboxapi", directory = "vendor/vboxapi" },
+]

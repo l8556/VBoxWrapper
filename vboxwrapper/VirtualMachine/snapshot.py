@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import time
 from rich.console import Console
 
+from ..api import VboxApi
 from ..commands import Commands
 from .info import Info
 
@@ -14,6 +14,7 @@ class Snapshot:
     """
 
     _cmd = Commands()
+    _api = VboxApi
 
     def __init__(self, info: Info):
         self.info = info
@@ -25,16 +26,33 @@ class Snapshot:
     def list(self) -> list:
         """
         Get a list of snapshots for the virtual machine.
-        :return: List of snapshots.
+        :return: List of snapshot names ordered from the root snapshot to the last child.
         """
-        return self._cmd.get_output(f"{self._cmd.snapshot} {self.name} list").split('\n')
+        machine = self.info.machine
+        if machine is None or not machine.snapshotCount:
+            return []
+
+        names = []
+        snapshots = [machine.findSnapshot('')]
+
+        while snapshots:
+            snapshot = snapshots.pop(0)
+            names.append(snapshot.name)
+            snapshots.extend(snapshot.children)
+
+        return names
 
     def delete(self, name: str) -> None:
         """
         Delete a snapshot.
         :param name: Name of the snapshot to delete.
         """
-        self._cmd.call(f"{self._cmd.snapshot} {self.name} delete {name}")
+        with self._api.machine_session(self.info.machine) as machine:
+            snapshot = machine.findSnapshot(name)
+            self._api.wait_progress(
+                machine.deleteSnapshot(snapshot.id),
+                f"[red]|ERROR|{self.name}| Unable to delete the snapshot {name}"
+            )
         print(f"[green]|INFO| Snapshot [cyan]{name}[/] deleted.")
 
     def restore(self, name: str = None) -> None:
@@ -42,9 +60,13 @@ class Snapshot:
         Restore a snapshot.
         :param name: Name of the snapshot to restore. If None, restore the most recent snapshot.
         """
-        print(f"[green]|INFO|{self.name}| Restoring snapshot: {name if name else self.list()[-1].strip()}")
-        self._cmd.call(f"{self._cmd.snapshot} {self.name} {f'restore {name}' if name else 'restorecurrent'}")
-        time.sleep(1)  # todo
+        with self._api.machine_session(self.info.machine) as machine:
+            snapshot = machine.findSnapshot(name) if name else machine.currentSnapshot
+            print(f"[green]|INFO|{self.name}| Restoring snapshot: {snapshot.name}")
+            self._api.wait_progress(
+                machine.restoreSnapshot(snapshot),
+                f"[red]|ERROR|{self.name}| Unable to restore the snapshot {snapshot.name}"
+            )
 
     def rename(self, old_name: str, new_name: str) -> None:
         """
@@ -52,15 +74,20 @@ class Snapshot:
         :param old_name: Current name of the snapshot.
         :param new_name: New name for the snapshot.
         """
-        self._cmd.call(f"{self._cmd.snapshot} {self.name} edit {old_name} --name {new_name}")
+        with self._api.machine_session(self.info.machine) as machine:
+            machine.findSnapshot(old_name).name = new_name
         print(f"[green]|INFO| Snapshot [cyan]{old_name}[/] has been renamed to [cyan]{new_name}[/]")
 
-    def take(self, name: str) -> None:
+    def take(self, name: str, description: str = '', pause: bool = True) -> None:
         """
         Take a snapshot.
         :param name: Name for the new snapshot.
+        :param description: Description of the new snapshot.
+        :param pause: True to pause a running machine while the snapshot is taken.
         """
-        self._cmd.call(f"{self._cmd.snapshot} {self.name} take {name}")
+        with self._api.machine_session(self.info.machine) as machine:
+            progress, _ = machine.takeSnapshot(name, description, pause)
+            self._api.wait_progress(progress, f"[red]|ERROR|{self.name}| Unable to take the snapshot {name}")
 
     def get_snapshots_info(self) -> list:
         """

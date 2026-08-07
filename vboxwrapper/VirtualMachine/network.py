@@ -4,6 +4,7 @@ from contextlib import nullcontext
 
 from ..VMExceptions import VirtualMachinException
 from .info import Info
+from ..api import VboxApi
 from ..commands import Commands
 from rich.console import Console
 
@@ -21,6 +22,7 @@ class Network:
     _HOSTONLY = 'hostonly'
 
     _cmd = Commands()
+    _api = VboxApi
 
     def __init__(self, info: Info):
         self.info = info
@@ -28,6 +30,20 @@ class Network:
     @property
     def name(self) -> str:
         return self.info.name
+
+    @property
+    def _attachment_types(self) -> dict:
+        """
+        Get the mapping of the supported connection types to the API attachment types.
+        :return: Dictionary with connection type names and NetworkAttachmentType values.
+        """
+        constants = self._api.constants()
+        return {
+            self._NAT: constants.NetworkAttachmentType_NAT,
+            self._BRIDGED: constants.NetworkAttachmentType_Bridged,
+            self._INTNET: constants.NetworkAttachmentType_Internal,
+            self._HOSTONLY: constants.NetworkAttachmentType_HostOnly,
+        }
 
     def set_adapter(
             self,
@@ -49,17 +65,17 @@ class Network:
                 f"[red]|ERROR| Please enter correct connection type: nat, bridged, intnet, hostonly"
             )
 
-        _adapter_name_flag = {
-            self._BRIDGED: f'--bridgeadapter{adapter_number}',
-            self._HOSTONLY: f'--hostonlyadapter{adapter_number}',
-        }
-        _adapter_name = f"{_adapter_name_flag[_connect_type]} \"{adapter_name}\"" \
-            if adapter_name and turn and _connect_type in _adapter_name_flag else ''
+        _named_types = (self._BRIDGED, self._HOSTONLY, self._INTNET)
+        _adapter_name = adapter_name if adapter_name and turn and _connect_type in _named_types else ''
 
-        self._cmd.call(
-            f"{self._cmd.modifyvm} {self.name} "
-            f"--nic{adapter_number} {connect_type.lower() if turn else 'none'} {_adapter_name}".strip()
-        )
+        with self._api.write_session(self.info.machine) as machine:
+            # Adapters are numbered from 1 in VBoxManage and from 0 in the API.
+            adapter = machine.getNetworkAdapter(int(adapter_number) - 1)
+            adapter.enabled = turn
+            if turn:
+                adapter.attachmentType = self._attachment_types[_connect_type]
+                if _adapter_name:
+                    self._set_adapter_name(adapter, _connect_type, _adapter_name)
 
         print(
             f'[green]|INFO| Network adapter [cyan]{adapter_number}[/] is turn [cyan]{"on" if turn else "off"}[/] '
@@ -67,43 +83,62 @@ class Network:
             f'{f" adapter name: [cyan]{_adapter_name}[/]" if _adapter_name else ""}'.strip()
         )
 
+    def _set_adapter_name(self, adapter, connect_type: str, adapter_name: str) -> None:
+        """
+        Attach the adapter to the named host interface or internal network.
+        :param adapter: INetworkAdapter object to configure.
+        :param connect_type: Connection type the adapter is attached to.
+        :param adapter_name: Name of the host interface or of the internal network.
+        """
+        if connect_type == self._BRIDGED:
+            adapter.bridgedInterface = adapter_name
+        elif connect_type == self._HOSTONLY:
+            adapter.hostOnlyInterface = adapter_name
+        elif connect_type == self._INTNET:
+            adapter.internalNetwork = adapter_name
+
     def get_bridged_interfaces(self) -> list[dict]:
         """
-        Retrieve and parse a list of bridged network interfaces from VirtualBox.
+        Retrieve a list of bridged network interfaces from VirtualBox.
 
-        This method runs the `VBoxManage list bridgedifs` command to obtain the available
-        bridged network interfaces on the host machine. It parses the output and returns a
-        list of dictionaries where each dictionary represents a bridged interface with its
-        respective properties, such as `Name`, `Status`, `IPAddress`, `MAC`, and others.
+        The host interfaces are read from the API and returned as a list of dictionaries
+        with the same keys as the `VBoxManage list bridgedifs` output, such as `Name`,
+        `Status`, `IPAddress`, `MAC` and others.
 
         :return: A list of dictionaries, each containing details of a bridged network interface.
         :rtype: list[dict]
         """
-        result = self._cmd.run(f"{self._cmd.vboxmanage} list bridgedifs", stdout=False, stderr=True)
-        lines = result.stdout.splitlines()
+        constants = self._api.constants()
+        statuses = {
+            constants.HostNetworkInterfaceStatus_Up: 'Up',
+            constants.HostNetworkInterfaceStatus_Down: 'Down',
+        }
 
-        adapters = []
-        adapter = {}
-
-        for line in lines:
-            if not line.strip():  # blank line = end of adapter description
-                if adapter:
-                    adapters.append(adapter)
-                    adapter = {}
-                continue
-            key, _, value = line.partition(':')
-            adapter[key.strip()] = value.strip()
-
-        if adapter:
-            adapters.append(adapter)  # add the last adapter
-
-        return adapters
+        return [
+            {
+                'Name': interface.name,
+                'GUID': str(interface.id).strip('{}'),
+                'DHCP': 'Enabled' if interface.DHCPEnabled else 'Disabled',
+                'IPAddress': interface.IPAddress,
+                'NetworkMask': interface.networkMask,
+                'IPV6Address': interface.IPV6Address,
+                'IPV6NetworkMaskPrefixLength': str(interface.IPV6NetworkMaskPrefixLength),
+                'HardwareAddress': interface.hardwareAddress,
+                'MediumType': 'Ethernet',
+                'Wireless': 'Yes' if interface.wireless else 'No',
+                'Status': statuses.get(interface.status, 'Unknown'),
+                'VBoxNetworkName': interface.networkName,
+            }
+            for interface in self._api.host().networkInterfaces
+            if interface.interfaceType == constants.HostNetworkInterfaceType_Bridged
+        ]
 
     def adapter_list(self) -> None:
         """
         List bridged network interfaces.
         """
-        self._cmd.call(f"{self._cmd.vboxmanage} list bridgedifs")
+        for interface in self.get_bridged_interfaces():
+            print(f"[cyan]{interface['Name']}[/]: {interface['IPAddress']} ({interface['Status']})")
 
     def wait_up(self, timeout: int = 300, status_bar: bool = False, interval: int = 1) -> None:
         """
@@ -133,7 +168,4 @@ class Network:
         Get the IP address of the network adapter.
         :return: IP address or None if not available.
         """
-        output = self._cmd.get_output(f'{self._cmd.guestproperty} {self.name} "/VirtualBox/GuestInfo/Net/0/V4/IP"')
-        if output and output != 'No value set!':
-            return output.split(':')[1].strip()
-        return None
+        return self.info.get_guest_property('/VirtualBox/GuestInfo/Net/0/V4/IP') or None

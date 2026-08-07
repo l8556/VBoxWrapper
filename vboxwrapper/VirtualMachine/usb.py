@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from rich.console import Console
 
-from ..commands import Commands
+from ..api import VboxApi
 from .info import Info
 console = Console()
 print = console.print
@@ -12,12 +12,12 @@ class USB:
     Class for managing USB controllers of a virtual machine.
     """
 
-    _cmd = Commands()
+    _api = VboxApi
 
     def __init__(self, info: Info):
         """
         Initialize USB controller manager.
-        :param vm_id: Virtual machine ID (name or uuid).
+        :param info: Information about the virtual machine.
         """
         self.info = info
 
@@ -30,24 +30,41 @@ class USB:
         Enable or disable USB controller (USB 1.1).
         :param turn: True to enable, False to disable.
         """
-        _turn = 'on' if turn else 'off'
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --usb {_turn}")
-        print(f"[green]|INFO|{self.name}| USB controller is [cyan]{_turn}[/]")
+        self._set_controller('OHCI', self._api.constants().USBControllerType_OHCI, turn)
+        print(f"[green]|INFO|{self.name}| USB controller is [cyan]{'on' if turn else 'off'}[/]")
 
     def ehci_controller(self, turn: bool) -> None:
         """
         Enable or disable USB 2.0 (EHCI) controller.
         :param turn: True to enable, False to disable.
         """
-        _turn = 'on' if turn else 'off'
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --usb-ehci {_turn}")
-        print(f"[green]|INFO|{self.name}| USB 2.0 (EHCI) controller is [cyan]{_turn}[/]")
+        self._set_controller('EHCI', self._api.constants().USBControllerType_EHCI, turn)
+        print(f"[green]|INFO|{self.name}| USB 2.0 (EHCI) controller is [cyan]{'on' if turn else 'off'}[/]")
 
     def xhci_controller(self, turn: bool) -> None:
         """
         Enable or disable USB 3.0 (xHCI) controller.
         :param turn: True to enable, False to disable.
         """
-        _turn = 'on' if turn else 'off'
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --usb-xhci {_turn}")
-        print(f"[green]|INFO|{self.name}| USB 3.0 (xHCI) controller is [cyan]{_turn}[/]")
+        self._set_controller('XHCI', self._api.constants().USBControllerType_XHCI, turn)
+        print(f"[green]|INFO|{self.name}| USB 3.0 (xHCI) controller is [cyan]{'on' if turn else 'off'}[/]")
+
+    def _set_controller(self, name: str, controller_type: int, turn: bool) -> None:
+        """
+        Add or remove a USB controller of the given type.
+        :param name: Name given to the controller, VBoxManage uses the type name as well.
+        :param controller_type: Value of the USBControllerType enum.
+        :param turn: True to add the controller, False to remove all controllers of this type.
+        """
+        with self._api.write_session(self.info.machine) as machine:
+            existing = [
+                controller for controller in machine.USBControllers if controller.type == controller_type
+            ]
+
+            if turn:
+                if not existing:
+                    machine.addUSBController(name, controller_type)
+                return
+
+            for controller in existing:
+                machine.removeUSBController(controller.name)

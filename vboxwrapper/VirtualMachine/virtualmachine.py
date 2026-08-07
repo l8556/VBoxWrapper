@@ -7,6 +7,7 @@ from rich.console import Console
 
 from .info import Info, ConfigEditor
 
+from ..api import VboxApi
 from ..commands import Commands
 from ..VMExceptions import VirtualMachinException
 
@@ -25,6 +26,7 @@ class VirtualMachine:
     """
 
     _cmd = Commands()
+    _api = VboxApi
 
     def __init__(self, vm_id: str, config_path: str = None):
         """
@@ -47,10 +49,28 @@ class VirtualMachine:
     def vm_dir(self) -> str:
         return self.info.vm_dir
 
-    def shutdown(self) -> None:
-        self._cmd.call(f"{self._cmd.controlvm} {self.name} acpipowerbutton")
+    @property
+    def machine(self):
+        """
+        Get the IMachine object of the virtual machine.
+        :return: IMachine object.
+        """
+        machine = self.info.machine
+        if machine is None:
+            raise VirtualMachinException(f"[red]|ERROR| The Virtual Machine {self.name} not exists.")
+        return machine
 
-    def wait_until_shutdown(self, timeout: int = 120) -> bool:
+    def shutdown(self) -> None:
+        """
+        Shutdown the virtual machine.
+        :return: None
+        """
+        if self.power_status() is False:
+            return print(f"[red]|ERROR|{self.name}| VirtualMachine already is powered off.")
+        with self._api.shared_session(self.machine) as session:
+            session.console.powerButton()
+
+    def wait_until_shutdown(self, timeout: int = 120, interval: int = 1) -> bool:
         """
         Wait until the virtual machine shuts down.
         :param timeout: Timeout duration in seconds.
@@ -61,7 +81,7 @@ class VirtualMachine:
             if self.power_status() is False:
                 print(f"[green]|INFO|{self.name}| Is Power Off.")
                 return True
-            time.sleep(1)
+            time.sleep(interval)
         return False
 
     def change_guest_password(self, new_password: str, username: str, password: str) -> None:
@@ -86,7 +106,8 @@ class VirtualMachine:
         which can lead to potential data leaks.
         :param turn_on: True - включить, False - отключить
         """
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --spec-ctrl {'on' if turn_on else 'off'}")
+        with self._api.write_session(self.machine) as machine:
+            machine.platform.x86.setCPUProperty(self._api.constants().CPUPropertyTypeX86_SpecCtrl, turn_on)
         print(f"[green]|INFO|{self.name}| Speculative Execution Control is [cyan]{'on' if turn_on else 'off'}[/]")
 
     def audio(self, turn: bool) -> None:
@@ -94,7 +115,11 @@ class VirtualMachine:
         Enable or disable audio interface.
         :param turn: True to enable, False to disable.
         """
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --audio-driver {'default' if turn else 'none'}")
+        constants = self._api.constants()
+        with self._api.write_session(self.machine) as machine:
+            adapter = machine.audioSettings.adapter
+            adapter.audioDriver = constants.AudioDriverType_Default if turn else constants.AudioDriverType_Null
+            adapter.enabled = turn
         print(f"[green]|INFO|{self.name}| Audio interface is [cyan]{'on' if turn else 'off'}[/]")
 
     def nested_virtualization(self, turn: bool) -> None:
@@ -103,7 +128,8 @@ class VirtualMachine:
         :param turn: True to enable, False to disable.
         """
         _turn = 'on' if turn else 'off'
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --nested-hw-virt {_turn}")
+        with self._api.write_session(self.machine) as machine:
+            machine.platform.x86.setCPUProperty(self._api.constants().CPUPropertyTypeX86_HWVirt, turn)
         print(f"[green]|INFO|{self.name}| Nested VT-x/AMD-V is [cyan]{_turn}[/]")
 
     def set_cpus(self, num: int) -> None:
@@ -111,7 +137,8 @@ class VirtualMachine:
         Set the number of CPU cores.
         :param num: Number of CPU cores.
         """
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --cpus {num}")
+        with self._api.write_session(self.machine) as machine:
+            machine.CPUCount = num
         print(f"[green]|INFO|{self.name}| The number of processor cores is set to [cyan]{num}[/]")
 
     def set_memory(self, num: int) -> None:
@@ -119,7 +146,8 @@ class VirtualMachine:
         Set the amount of memory.
         :param num: Amount of memory.
         """
-        self._cmd.call(f"{self._cmd.modifyvm} {self.name} --memory {num}")
+        with self._api.write_session(self.machine) as machine:
+            machine.memorySize = num
         print(f"[green]|INFO|{self.name}| Installed RAM quantity: [cyan]{num}[/]")
 
     def wait_logged_user(self, timeout: int = 300, status_bar: bool = False) -> None:
@@ -154,7 +182,12 @@ class VirtualMachine:
         """
         if self.power_status() is False:
             print(f"[green]|INFO|{self.name}| Starting VirtualMachine")
-            self._cmd.call(f'{self._cmd.startvm} {self.name}{" --type headless" if headless else ""}')
+            session = self._api.manager().getSessionObject()
+            try:
+                progress = self.machine.launchVMProcess(session, 'headless' if headless else 'gui', [])
+                self._api.wait_progress(progress, f"[red]|ERROR|{self.name}| Unable to start VirtualMachine")
+            finally:
+                self._api.manager().closeMachineSession(session)
         else:
             print(f"[red]|INFO|{self.name}| VirtualMachine already is running")
 
@@ -163,11 +196,7 @@ class VirtualMachine:
         Check the power status of the virtual machine.
         :return: True if the virtual machine is running, False otherwise.
         """
-        vm_state = self.get_parameter('VMState')
-        if vm_state:
-            return vm_state.lower() == "running"
-        print(f"[red]|INFO|{self.name}| Unable to determine virtual machine status")
-        return False
+        return self.info.power_status()
 
     def stop(self, wait_until_shutdown: bool = True) -> None:
         """
@@ -179,7 +208,9 @@ class VirtualMachine:
         :return: None
         """
         print(f"[green]|INFO|{self.name}| Shutting down the virtual machine")
-        self._cmd.call(f'{self._cmd.controlvm} {self.name} poweroff')
+        with self._api.shared_session(self.machine) as session:
+            progress = session.console.powerDown()
+            self._api.wait_progress(progress, f"[red]|ERROR|{self.name}| Unable to power off the virtual machine")
 
         if wait_until_shutdown:
             self.wait_until_shutdown()
@@ -193,6 +224,12 @@ class VirtualMachine:
     def get_parameter(self, *args, **kwargs) -> Optional[str]:
         return self.info.get_parameter(*args, **kwargs)
 
+    def get_parameters(self, *args, **kwargs) -> dict:
+        return self.info.get_parameters(*args, **kwargs)
+
+    def get_guest_properties(self) -> dict:
+        return self.info.get_guest_properties()
+
     def get_info(self, *args, **kwargs) -> str:
         return self.info.get(*args, **kwargs)
 
@@ -204,11 +241,8 @@ class VirtualMachine:
         Check if the current virtual machine is registered in VirtualBox.
         :return: True if the virtual machine is registered, False otherwise.
         """
-        vm_list_output = self._cmd.get_output(self._cmd.list)
-        for line in vm_list_output.split('\n'):
-            if self.name in line:
-                return True
-        return False
+        self.info.refresh()
+        return self.info.machine is not None
 
     def register(self, vbox_file_path: str) -> None:
         """
@@ -216,11 +250,15 @@ class VirtualMachine:
         :param vbox_file_path: Path to the .vbox file.
         """
         if not self.is_registered():
-            result = self._cmd.call(f'{self._cmd.registervm} "{vbox_file_path}"')
-            if result == 0:
-                print(f"[green]|INFO|{self.name}| Virtual machine registered successfully: {vbox_file_path}")
-            else:
-                raise VirtualMachinException(f"[red]|ERROR|{self.name}| Failed to register virtual machine: {vbox_file_path}")
+            try:
+                vbox = self._api.vbox()
+                vbox.registerMachine(vbox.openMachine(vbox_file_path, ''))
+            except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
+                raise VirtualMachinException(
+                    f"[red]|ERROR|{self.name}| Failed to register virtual machine: {vbox_file_path}"
+                ) from error
+            self.info.refresh()
+            print(f"[green]|INFO|{self.name}| Virtual machine registered successfully: {vbox_file_path}")
         else:
             print(f"[cyan]|INFO|{self.name}| Virtual machine already is registered: {self.info.config_path}")
 
@@ -242,9 +280,9 @@ class VirtualMachine:
         print(f"[cyan]|INFO|{self.name}| Old directory: {old_vm_dir}")
         print(f"[cyan]|INFO|{self.name}| Moving virtual machine to {dir}")
 
-        result = self._cmd.call(f'{self._cmd.movevm} {self.name} --folder "{dir}"')
-        if result != 0:
-            raise VirtualMachinException(
+        with self._api.write_session(self.machine) as machine:
+            self._api.wait_progress(
+                machine.moveTo(dir, 'basic'),
                 f"[red]|ERROR|{self.name}| Failed to move virtual machine to {dir}"
             )
         print(f"[green]|INFO|{self.name}| Virtual machine moved successfully to {dir}")

@@ -19,9 +19,15 @@ snapshot management, and network configuration through an intuitive Python API.
 VBoxWrapper requires Python 3.7 or higher and VirtualBox to be installed
 on your system.
 
+The library talks to VirtualBox through its Python API, so the `vboxapi`
+bindings have to be available. They are not published on PyPI: with `uv` they
+are built automatically (see below), with `pip` install them from the SDK of
+the local VirtualBox installation.
+
 ### Using pip
 
 ```bash
+pip install "C:/Program Files/Oracle/VirtualBox/sdk/installer/python/vboxapi"
 pip install git+https://github.com/l8556/VBoxWrapper.git
 ```
 
@@ -39,8 +45,7 @@ pip install .
 uv sync
 ```
 
-Along with the regular dependencies `uv sync` builds and installs `vboxapi`,
-the VirtualBox Python bindings. They are not published on PyPI, so
+`uv sync` also builds and installs `vboxapi`, the VirtualBox Python bindings.
 `vendor/vboxapi` builds them from the SDK of the VirtualBox installation
 found on the machine (or the one pointed to by `VBOX_MSI_INSTALL_PATH`
 or `VBOX_INSTALL_PATH`). After upgrading VirtualBox refresh the bindings:
@@ -85,6 +90,41 @@ vm.network.set_adapter(
 vm.shutdown()
 ```
 
+## Running machines in parallel
+
+Several machines can be driven at the same time, one thread per machine.
+VirtualBox keeps a single API connection for the whole process and every
+thread has to attach itself to it, which `vboxwrapper` does on first use.
+Two rules apply (with separate processes, e.g. a `ProcessPoolExecutor`,
+neither of them is needed, as every process gets a connection of its own):
+
+- initialize the API in the main thread with `VboxApi.manager()` before the
+  workers start, the connection breaks when the thread that opened it ends;
+- let every worker release its attachment through `VboxApi.thread_context()`
+  (or `VboxApi.deinit_thread()`) and give it a machine of its own, as a
+  machine accepts only one session at a time.
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+
+from vboxwrapper import VirtualMachine, VboxApi
+
+VboxApi.manager()
+
+
+def run_tests(vm_name: str) -> None:
+    with VboxApi.thread_context():
+        vm = VirtualMachine(vm_name)
+        vm.run(headless=True)
+        vm.wait_logged_user()
+        # ... run the tests ...
+        vm.shutdown()
+
+
+with ThreadPoolExecutor(max_workers=3) as pool:
+    pool.map(run_tests, ['Ubuntu22', 'Debian11', 'Fedora39'])
+```
+
 ## Documentation
 
 ### Vbox Class
@@ -113,6 +153,8 @@ Speculative Execution Control is a mechanism
 - `set_cpus(num: int)`: Set the number of CPU cores.
 - `set_memory(num: int)`: Set the amount of memory.
 - `get_logged_user()`: Get the logged-in user.
+- `change_guest_password(new_password, username, password)`: Change the
+  password of a guest user.
 - `power_status()`: Check the power status of the virtual machine.
 - `get_os_type()`: Retrieve the operating system type of the virtual machine.
 - `get_info()`: Get information about the virtual machine.

@@ -25,6 +25,7 @@ class FileUtils:
     _SESSION_TIMEOUT = 30 * 1000
     _READ_TIMEOUT = 500
     _READ_SIZE = 64 * 1024
+    _STDIN_HANDLE = 0
     _STDOUT_HANDLE = 1
     _STDERR_HANDLE = 2
     # Executable and arguments of the shells the commands can be executed with.
@@ -93,7 +94,8 @@ class FileUtils:
             wait_stdout: bool = True,
             status_bar: bool = False,
             max_stdout_lines: int = 20,
-            env: dict = None
+            env: dict = None,
+            stdin: str = None
     ) -> CompletedProcess:
         """
         Run a command on the virtual machine.
@@ -112,6 +114,8 @@ class FileUtils:
         :param env: Environment variables set for the command, e.g. {'PATH': '/home/user/.local/bin'}.
         The guest starts the command with a minimal environment, so a variable given here replaces
         the value of the guest instead of extending it.
+        :param stdin: Text fed to the standard input of the command, which is closed afterwards.
+        Keeps secrets out of the command line of the guest, where any user could read them.
         :return: A `CompletedProcess` object containing the command, return code, stdout, and stderr.
         """
         constants = self._api.constants()
@@ -128,6 +132,8 @@ class FileUtils:
                 # the command run for as long as it needs.
                 process = guest_session.processCreate(executable, arguments, '', environment, flags, 0)
                 process.waitFor(constants.ProcessWaitForFlag_Start, self._SESSION_TIMEOUT)
+                if stdin is not None:
+                    self._write_stdin(process, stdin)
                 _stdout, _stderr = self._read_output(
                     process, command, wait_stdout, stdout, stderr, status_bar, max_stdout_lines
                 )
@@ -194,6 +200,21 @@ class FileUtils:
         except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
             return self._failed(command, f"|ERROR|{self.name}| Unable to copy {source}: {error}")
         return CompletedProcess(command, returncode=0, stdout='', stderr='')
+
+    def _write_stdin(self, process, data: str) -> None:
+        """
+        Send text to the standard input of a guest process and close the stream.
+        :param process: IGuestProcess to write to.
+        :param data: Text to write, a trailing newline is added when it is missing.
+        """
+        constants = self._api.constants()
+        payload = data if data.endswith('\n') else f'{data}\n'
+        process.write(
+            self._STDIN_HANDLE,
+            constants.ProcessInputFlag_EndOfFile,
+            payload.encode('utf-8'),
+            self._SESSION_TIMEOUT
+        )
 
     def _read_output(
             self,

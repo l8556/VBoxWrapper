@@ -62,7 +62,7 @@ class Snapshot:
         """
         with self._api.machine_session(self.info.machine) as machine:
             snapshot = machine.findSnapshot(name) if name else machine.currentSnapshot
-            print(f"[green]|INFO|{self.name}| Restoring snapshot: {snapshot.name}")
+            print(f"[green]|INFO|{self.name}| Restoring snapshot: [cyan]{snapshot.name}[/]")
             self._api.wait_progress(
                 machine.restoreSnapshot(snapshot),
                 f"[red]|ERROR|{self.name}| Unable to restore the snapshot {snapshot.name}"

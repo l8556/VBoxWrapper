@@ -29,10 +29,12 @@ class FileUtils:
     _STDOUT_HANDLE = 1
     _STDERR_HANDLE = 2
     # Executable and arguments of the shells the commands can be executed with.
+    # Linux uses a login shell (-l) so PATH and other profile settings of the user are loaded;
+    # guestcontrol alone does not apply the Linux user profile the way it does on Windows.
     _SHELLS = {
         'powershell': ('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-Command']),
         'cmd': ('C:\\Windows\\System32\\cmd.exe', ['/q', '/c']),
-        'bash': ('/bin/bash', ['-c']),
+        'bash': ('/bin/bash', ['-l', '-c']),
     }
 
     def __init__(self, vm_id: str | VirtualMachine, username: str,  password: str, os_type: str = None):
@@ -120,8 +122,10 @@ class FileUtils:
         """
         constants = self._api.constants()
         executable, arguments = self._get_run_cmd(shell, command)
-        environment = [f'{name}={value}' for name, value in (env or {}).items()]
-        # Only Windows guests honour the profile, the other guests keep their minimal environment.
+        merged_env = {**self._default_env(), **(env or {})}
+        environment = [f'{name}={value}' for name, value in merged_env.items()]
+        # Profile is honoured on Windows guests. Linux guests still get a minimal environment from
+        # Guest Additions, so bash is started as a login shell (-l) and HOME/PATH are set explicitly.
         flags = [constants.ProcessCreateFlag_Profile]
         if wait_stdout:
             flags += [constants.ProcessCreateFlag_WaitForStdOut, constants.ProcessCreateFlag_WaitForStdErr]
@@ -280,6 +284,32 @@ class FileUtils:
         except Exception:  # pylint: disable=broad-except -- reading a closed stream raises
             return ''
         return bytes(data).decode('utf-8', errors='replace') if data else ''
+
+    def _default_env(self) -> dict:
+        """
+        Build the environment guestcontrol should start with.
+
+        Linux Guest Additions start processes with a minimal environment (often without HOME),
+        so login shells cannot load ~/.profile and miss /usr/local/bin and ~/.local/bin where
+        newer Python and user tools usually live. Mirror the PATH used by the systemd runner.
+        :return: Default environment variables, empty for Windows guests.
+        """
+        os_type = (self.os_type or self.vm.get_os_type() or '').lower()
+        if 'windows' in os_type:
+            return {}
+
+        home = f'/home/{self._username}'
+        path = (
+            '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
+            f'{home}/.local/bin'
+        )
+        return {
+            'HOME': home,
+            'USER': self._username,
+            'LOGNAME': self._username,
+            'SHELL': '/bin/bash',
+            'PATH': path,
+        }
 
     def _get_run_cmd(self, shell: str, command: str) -> tuple:
         """

@@ -3,6 +3,8 @@ from contextlib import contextmanager, nullcontext
 from os import makedirs, sep, walk
 from os.path import abspath, basename, dirname, isdir, isfile, join, relpath
 from subprocess import CompletedProcess
+from time import sleep
+from uuid import uuid4
 
 from rich import print
 from rich.console import Console
@@ -21,8 +23,9 @@ class FileUtils:
     """
 
     _api = VboxApi
-    # Name the sessions are registered under, shown by `VBoxManage guestcontrol list sessions`.
-    _SESSION_NAME = 'vboxwrapper'
+    # Prefix for guestcontrol session names; each session gets a unique suffix to avoid
+    # VERR_DUPLICATE when sessions are opened in quick succession on the same VM.
+    _SESSION_NAME_PREFIX = 'vboxwrapper'
     _SESSION_TIMEOUT = 30 * 1000
     _READ_TIMEOUT = 500
     _READ_SIZE = 64 * 1024
@@ -78,15 +81,38 @@ class FileUtils:
         """
         constants = self._api.constants()
         command = f'create directory {remote_path}'
+        last_error = None
 
-        try:
-            with self._guest_session() as guest_session:
-                guest_session.directoryCreate(remote_path, 0o755, [constants.DirectoryCreateFlag_Parents])
-        except VboxException as error:
-            return self._failed(command, str(error))
-        except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
-            return self._failed(command, f"|ERROR|{self.name}| Unable to create {remote_path}: {error}")
-        return CompletedProcess(command, returncode=0, stdout='', stderr='')
+        for attempt in range(1, 6):
+            try:
+                with self._guest_session() as guest_session:
+                    guest_session.directoryCreate(
+                        remote_path, 0o755, [constants.DirectoryCreateFlag_Parents]
+                    )
+                return CompletedProcess(command, returncode=0, stdout='', stderr='')
+            except VboxException as error:
+                last_error = error
+            except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
+                last_error = error
+            if attempt >= 5 or not self._is_guest_session_retryable(last_error):
+                break
+            sleep(min(attempt, 3.0))
+
+        # API directoryCreate races on some Linux GA builds; shell mkdir is enough for tests.
+        if not self._is_windows_guest():
+            fallback = self.run_cmd(
+                f'mkdir -p -- {self._shell_quote(remote_path)}',
+                stdout=False,
+                stderr=False,
+                status_bar=False,
+            )
+            if fallback.returncode == 0:
+                return CompletedProcess(command, returncode=0, stdout='', stderr='')
+
+        return self._failed(
+            command,
+            f"|ERROR|{self.name}| Unable to create {remote_path}: {last_error}",
+        )
 
     def run_cmd(
             self,
@@ -157,6 +183,9 @@ class FileUtils:
     def _guest_session(self):
         """
         Open a guest session on the running machine and close it when the block ends.
+
+        Linux Guest Additions often return VERR_DUPLICATE when sessions are opened
+        immediately after the previous one is closed; retries with backoff handle that.
         :return: IGuestSession logged in as the configured user.
         """
         if not self.vm.power_status():
@@ -164,10 +193,28 @@ class FileUtils:
 
         constants = self._api.constants()
         with self._api.shared_session(self.vm.machine) as session:
-            guest_session = session.console.guest.createSession(
-                self._username, self._password, '', self._SESSION_NAME
-            )
+            guest_session = self._create_guest_session(session, constants)
             try:
+                yield guest_session
+            finally:
+                self._close_guest_session(guest_session, constants)
+
+    def _create_guest_session(self, session, constants, max_attempts: int = 5):
+        """
+        Create and wait for a guest session, retrying transient GA races.
+        :param session: Open VirtualBox machine session with a console.
+        :param constants: VirtualBox COM constants.
+        :param max_attempts: How many times to retry on VERR_DUPLICATE / start failures.
+        :return: Started IGuestSession.
+        """
+        last_error = None
+        for attempt in range(1, max_attempts + 1):
+            session_name = f'{self._SESSION_NAME_PREFIX}-{uuid4().hex}'
+            guest_session = None
+            try:
+                guest_session = session.console.guest.createSession(
+                    self._username, self._password, '', session_name
+                )
                 if guest_session.waitFor(
                         constants.GuestSessionWaitForFlag_Start, self._SESSION_TIMEOUT
                 ) != constants.GuestSessionWaitResult_Start:
@@ -175,9 +222,61 @@ class FileUtils:
                         f"|ERROR|{self.name}| Unable to log in to the guest as {self._username}. "
                         f"Check the credentials and that the Guest Additions are running."
                     )
-                yield guest_session
-            finally:
-                guest_session.close()
+                return guest_session
+            except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
+                last_error = error
+                self._close_guest_session(guest_session, constants)
+                if attempt >= max_attempts or not self._is_guest_session_retryable(error):
+                    raise
+                sleep(min(attempt * 0.5, 3.0))
+        raise last_error or VboxException(f"|ERROR|{self.name}| Unable to open a guest session.")
+
+    def _close_guest_session(self, guest_session, constants=None) -> None:
+        """
+        Close a guest session and give Guest Additions time to release it.
+        :param guest_session: Session to close, or None.
+        :param constants: Unused, kept for call-site compatibility.
+        :return: None
+        """
+        if guest_session is None:
+            return
+        try:
+            guest_session.close()
+        except Exception:  # pylint: disable=broad-except -- session may already be gone
+            pass
+        # Rapid reopen on Linux GA frequently yields VERR_DUPLICATE without this pause.
+        sleep(1.0)
+
+    @staticmethod
+    def _is_guest_session_retryable(error) -> bool:
+        """
+        Whether a guest session error is worth retrying.
+        :param error: Exception or message raised while talking to Guest Additions.
+        :return: True when the failure looks transient.
+        """
+        if error is None:
+            return False
+        text = str(error).lower()
+        return any(
+            token in text
+            for token in (
+                'verr_duplicate',
+                'verr_timeout',
+                'access_denied',
+                'not able to logon',
+                'unable to log in',
+                'guest additions',
+            )
+        )
+
+    @staticmethod
+    def _shell_quote(value: str) -> str:
+        """
+        Quote a path for a POSIX shell.
+        :param value: Raw path or argument.
+        :return: Single-quoted shell-safe string.
+        """
+        return "'" + value.replace("'", "'\"'\"'") + "'"
 
     def _copy(self, source: str, destination: str, to_guest: bool) -> CompletedProcess:
         """
@@ -210,15 +309,27 @@ class FileUtils:
             if not to_guest:
                 makedirs(dirname(destination) or '.', exist_ok=True)
 
-            with self._guest_session() as guest_session:
-                copy = guest_session.fileCopyToGuest if to_guest else guest_session.fileCopyFromGuest
-                progress = copy(source, destination, [constants.FileCopyFlag_None])
-                self._api.wait_progress(progress, f"|ERROR|{self.name}| Unable to copy {source}")
+            last_error = None
+            for attempt in range(1, 6):
+                try:
+                    with self._guest_session() as guest_session:
+                        copy = guest_session.fileCopyToGuest if to_guest else guest_session.fileCopyFromGuest
+                        progress = copy(source, destination, [constants.FileCopyFlag_None])
+                        self._api.wait_progress(progress, f"|ERROR|{self.name}| Unable to copy {source}")
+                    return CompletedProcess(command, returncode=0, stdout='', stderr='')
+                except VboxException as error:
+                    last_error = error
+                except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
+                    last_error = error
+                if attempt >= 5 or not self._is_guest_session_retryable(last_error):
+                    break
+                sleep(min(attempt, 3.0))
+
+            return self._failed(command, f"|ERROR|{self.name}| Unable to copy {source}: {last_error}")
         except VboxException as error:
             return self._failed(command, str(error))
         except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
             return self._failed(command, f"|ERROR|{self.name}| Unable to copy {source}: {error}")
-        return CompletedProcess(command, returncode=0, stdout='', stderr='')
 
     def _copy_directory(self, source: str, destination: str, to_guest: bool) -> CompletedProcess:
         """

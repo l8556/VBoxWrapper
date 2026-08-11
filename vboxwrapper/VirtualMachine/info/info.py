@@ -21,7 +21,6 @@ class Info:
     _STATE_NAMES = {'PoweredOff': 'poweroff', 'AbortedSaved': 'abortedsaved'}
     # Highest number of adapters supported by any chipset, used when the real limit is unavailable.
     _MAX_NETWORK_ADAPTERS = 36
-    # Nested API objects holding a part of the machine settings, read under a prefixed name.
 
     def __init__(self, vm_id: str, config_path: str = None):
         self.__vm_id = vm_id
@@ -181,8 +180,7 @@ class Info:
         :return: Value of the parameter.
         """
         param_lower = parameter.lower()
-        # Nested parameters are addressed by a dotted path, e.g. nic1.attachmentType.
-        api_parameters = self.get_parameters(nested='.' in param_lower)
+        api_parameters = self.get_parameters()
 
         for key, value in api_parameters.items():
             if key.lower() == param_lower:
@@ -198,18 +196,14 @@ class Info:
         """
         Get all machine parameters, generated from the properties the API exposes on IMachine.
         Values are converted to strings, enums are reported under their readable names.
-        :param nested: If True, also reads the nested objects: platform, audio, network and storage.
+        Unknown showvminfo names still resolve via get_parameter fallback.
         :return: Dictionary with parameter names and their values, empty if the machine is not registered.
         """
         machine = self.machine
         if machine is None:
             return {}
 
-
-        # print(machine.)
-
-        parameters = self._read_object(machine)
-        return parameters
+        return self._read_object(machine)
 
     @classmethod
     def _read_object(cls, obj, prefix: str = '') -> dict:

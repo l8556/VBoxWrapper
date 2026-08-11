@@ -38,7 +38,7 @@ class Snapshot:
         while snapshots:
             snapshot = snapshots.pop(0)
             names.append(snapshot.name)
-            snapshots.extend(snapshot.children)
+            snapshots.extend(self._api.array(snapshot, 'children'))
 
         return names
 

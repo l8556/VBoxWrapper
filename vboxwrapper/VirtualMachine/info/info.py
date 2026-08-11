@@ -293,7 +293,7 @@ class Info:
         Get the group name of the virtual machine.
         :return: Group name of the virtual machine.
         """
-        groups = list(self.machine.groups) if self.machine is not None else []
+        groups = self._api.array(self.machine, 'groups') if self.machine is not None else []
         group_name = groups[0].strip() if groups else None
         return group_name.replace('/', '') if group_name else None
 

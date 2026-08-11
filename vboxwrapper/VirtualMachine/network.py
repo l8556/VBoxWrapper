@@ -129,7 +129,7 @@ class Network:
                 'Status': statuses.get(interface.status, 'Unknown'),
                 'VBoxNetworkName': interface.networkName,
             }
-            for interface in self._api.host().networkInterfaces
+            for interface in self._api.array(self._api.host(), 'networkInterfaces')
             if interface.interfaceType == constants.HostNetworkInterfaceType_Bridged
         ]
 

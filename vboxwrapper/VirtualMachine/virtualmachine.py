@@ -23,6 +23,10 @@ print = console.print
 class VirtualMachine:
     """
     Class representing a virtual machine and its operations.
+
+    An object belongs to the thread that uses it: machines can be driven in parallel by giving
+    every thread its own object and its own machine. A worker thread should end its work with
+    VboxApi.deinit_thread() or run inside a VboxApi.thread_context() block.
     """
 
     _cmd = Commands()
@@ -87,16 +91,24 @@ class VirtualMachine:
     def change_guest_password(self, new_password: str, username: str, password: str) -> None:
         """
         Change the guest password of the virtual machine.
+        Both passwords travel through the standard input of passwd, so they show up neither on
+        the command line of the host nor on the one of the guest.
         :param new_password: New password.
         :param username: Username.
         :param password: Current password.
         """
-        self._cmd.call(
-            f"{self._cmd.guestcontrol} {self.name} run "
-            f"--username {username} --password {password} "
-            f"--wait-stdout -- /bin/bash -c "
-            f"\"echo -e '{password}\\n{new_password}\\n{new_password}' | passwd {username}\""
+        from .FileUtils import FileUtils  # imported here as FileUtils needs this module
+
+        result = FileUtils(vm_id=self, username=username, password=password).run_cmd(
+            f'passwd {username}',
+            stdout=False,
+            stderr=False,
+            stdin=f'{password}\n{new_password}\n{new_password}'
         )
+
+        if result.returncode != 0:
+            return print(f"[red]|ERROR|{self.name}| Unable to change the password of {username}: {result.stderr}")
+        print(f"[green]|INFO|{self.name}| The password of {username} is changed")
 
     def speculative_execution_control(self, turn_on: bool = True) -> None:
         """

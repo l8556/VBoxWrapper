@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Access layer to the VirtualBox API (vboxapi) shared by the whole package."""
 import atexit
+import threading
+import warnings
 from contextlib import contextmanager
 from typing import Optional
 
@@ -13,22 +15,86 @@ class VboxApi:
     """
     Process wide entry point to the VirtualBox API.
 
-    A single VirtualBoxManager is kept for the whole process, since every instance opens its own
-    connection to VirtualBox and has to be initialized in the thread that uses it.
+    A single VirtualBoxManager is kept for the whole process, as the VirtualBox SDK asks for.
+    Threads are supported: every thread that reaches the API is attached to it on first use, so
+    machines can be driven in parallel as long as each thread works on a machine of its own.
+    A worker thread should release its attachment with deinit_thread() or the thread_context()
+    block before it ends, otherwise the COM resources of the thread stay allocated.
     """
 
     __manager = None
+    __owner_thread = None
+    __at_exit_registered = False
+    __lock = threading.RLock()
+    __local = threading.local()
 
     @classmethod
     def manager(cls) -> VirtualBoxManager:
         """
-        Get the shared VirtualBox manager, creating it on first use.
+        Get the shared VirtualBox manager, creating it on first use and attaching the calling
+        thread to it.
         :return: Initialized VirtualBox manager.
         """
-        if cls.__manager is None:
-            cls.__manager = VirtualBoxManager()
-            atexit.register(cls.deinit)
+        if getattr(cls.__local, 'attached', False):
+            return cls.__manager
+
+        with cls.__lock:
+            if cls.__manager is None:
+                cls.__warn_outside_main_thread()
+                # The thread creating the manager is attached by the API itself.
+                cls.__manager = VirtualBoxManager()
+                cls.__owner_thread = threading.get_ident()
+                if not cls.__at_exit_registered:
+                    atexit.register(cls.deinit)
+                    cls.__at_exit_registered = True
+            elif threading.get_ident() != cls.__owner_thread:
+                cls.__manager.initPerThread()
+
+        cls.__local.attached = True
         return cls.__manager
+
+    @classmethod
+    def __warn_outside_main_thread(cls) -> None:
+        """
+        Warn when the API is about to be initialized outside the main thread.
+        The objects of the API stop working once the thread that created them ends, which takes
+        the whole process down, so the first call has to come from a thread that lives on.
+        """
+        if threading.current_thread() is threading.main_thread():
+            return
+
+        warnings.warn(
+            f"The VirtualBox API is being initialized in the thread "
+            f"{threading.current_thread().name!r}. Call VboxApi.manager() from the main thread "
+            f"before starting the workers, otherwise the API breaks when this thread ends.",
+            RuntimeWarning,
+            stacklevel=4
+        )
+
+    @classmethod
+    def deinit_thread(cls) -> None:
+        """
+        Release the API resources of the calling thread, keeping the manager for the other threads.
+        """
+        if not getattr(cls.__local, 'attached', False):
+            return
+
+        cls.__local.attached = False
+        if cls.__manager is not None and threading.get_ident() != cls.__owner_thread:
+            cls.__manager.deinitPerThread()
+
+    @classmethod
+    @contextmanager
+    def thread_context(cls):
+        """
+        Attach the calling thread to the API and detach it when the block ends.
+        Meant for worker threads, the thread that created the manager is left untouched.
+        """
+        cls.manager()
+        try:
+            yield
+        finally:
+            cls.deinit_thread()
 
     @classmethod
     def vbox(cls):
@@ -57,11 +123,14 @@ class VboxApi:
     @classmethod
     def deinit(cls) -> None:
         """
-        Release the shared VirtualBox manager.
+        Release the shared VirtualBox manager, ending the API access of the whole process.
         """
-        if cls.__manager is not None:
-            cls.__manager.deinit()
-            cls.__manager = None
+        with cls.__lock:
+            if cls.__manager is not None:
+                cls.__manager.deinit()
+                cls.__manager = None
+                cls.__owner_thread = None
+        cls.__local.attached = False
 
     @classmethod
     def find_machine(cls, vm_id: str):

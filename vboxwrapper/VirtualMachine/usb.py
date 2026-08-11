@@ -58,7 +58,8 @@ class USB:
         """
         with self._api.write_session(self.info.machine) as machine:
             existing = [
-                controller for controller in machine.USBControllers if controller.type == controller_type
+                controller for controller in self._api.array(machine, 'USBControllers')
+                if controller.type == controller_type
             ]
 
             if turn:

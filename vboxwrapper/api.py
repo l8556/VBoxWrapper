@@ -121,6 +121,18 @@ class VboxApi:
         return cls.vbox().host
 
     @classmethod
+    def array(cls, obj, attribute: str) -> list:
+        """
+        Read an attribute holding an array of an API object.
+        COM hands such attributes out directly while XPCOM only exposes them through a getter,
+        so they have to be read through the manager to work on every platform.
+        :param obj: API object owning the attribute.
+        :param attribute: Name of the attribute, e.g. networkInterfaces.
+        :return: List with the values of the attribute.
+        """
+        return list(cls.manager().getArray(obj, attribute) or [])
+
+    @classmethod
     def deinit(cls) -> None:
         """
         Release the shared VirtualBox manager, ending the API access of the whole process.

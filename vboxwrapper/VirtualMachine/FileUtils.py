@@ -32,7 +32,7 @@ class FileUtils:
     _SHELLS = {
         'powershell': ('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-Command']),
         'cmd': ('C:\\Windows\\System32\\cmd.exe', ['/q', '/c']),
-        'bash': ('/usr/bin/bash', ['-c']),
+        'bash': ('/bin/bash', ['-c']),
     }
 
     def __init__(self, vm_id: str | VirtualMachine, username: str,  password: str, os_type: str = None):

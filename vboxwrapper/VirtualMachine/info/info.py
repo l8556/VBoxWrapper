@@ -22,41 +22,6 @@ class Info:
     # Highest number of adapters supported by any chipset, used when the real limit is unavailable.
     _MAX_NETWORK_ADAPTERS = 36
     # Nested API objects holding a part of the machine settings, read under a prefixed name.
-    _NESTED_OBJECTS = (
-        'platform', 'platform.x86', 'audioSettings.adapter', 'firmwareSettings', 'graphicsAdapter',
-        'VRDEServer', 'recordingSettings', 'trustedPlatformModule', 'guestDebugControl',
-        'nonVolatileStore', 'bandwidthControl',
-    )
-    # Enum type of the parameters the API reports as plain integers, keyed by the lowercase name.
-    _ENUM_TYPES = {
-        'state': 'MachineState',
-        'sessionstate': 'SessionState',
-        'autostoptype': 'AutostopType',
-        'clipboardmode': 'ClipboardMode',
-        'dndmode': 'DnDMode',
-        'keyboardhidtype': 'KeyboardHIDType',
-        'pointinghidtype': 'PointingHIDType',
-        'paravirtprovider': 'ParavirtProvider',
-        'vmexecutionengine': 'VMExecutionEngine',
-        'vmprocesspriority': 'VMProcPriority',
-        'architecture': 'PlatformArchitecture',
-        'chipsettype': 'ChipsetType',
-        'iommutype': 'IommuType',
-        'audiocontroller': 'AudioControllerType',
-        'audiocodec': 'AudioCodecType',
-        'audiodriver': 'AudioDriverType',
-        'firmwaretype': 'FirmwareType',
-        'apicmode': 'APICMode',
-        'bootmenumode': 'FirmwareBootMenuMode',
-        'graphicscontrollertype': 'GraphicsControllerType',
-        'authtype': 'AuthType',
-        'adaptertype': 'NetworkAdapterType',
-        'attachmenttype': 'NetworkAttachmentType',
-        'promiscmodepolicy': 'NetworkAdapterPromiscModePolicy',
-        'debugprovider': 'GuestDebugProvider',
-        'debugioprovider': 'GuestDebugIoProvider',
-        'trustedplatformmodule.type': 'TpmType',
-    }
 
     def __init__(self, vm_id: str, config_path: str = None):
         self.__vm_id = vm_id
@@ -229,7 +194,7 @@ class Info:
                 return value.replace('"', '').replace("'", '').strip()
         return None
 
-    def get_parameters(self, nested: bool = True) -> dict:
+    def get_parameters(self) -> dict:
         """
         Get all machine parameters, generated from the properties the API exposes on IMachine.
         Values are converted to strings, enums are reported under their readable names.
@@ -244,11 +209,6 @@ class Info:
         # print(machine.)
 
         parameters = self._read_object(machine)
-        if not nested:
-            return parameters
-
-        for path in self._NESTED_OBJECTS:
-            parameters.update(self._read_object(self._resolve(machine, path), prefix=f'{path}.'))
         return parameters
 
     @classmethod
@@ -269,115 +229,8 @@ class Info:
             except Exception:  # pylint: disable=broad-except -- state dependent properties raise
                 continue
             if not callable(value):
-                parameters[f'{prefix}{name}'] = cls._as_text(value, name, prefix)
+                parameters[f'{prefix}{name}'] = str(value)
         return parameters
-
-    @classmethod
-    def _read_x86_properties(cls, machine) -> dict:
-        """
-        Read the CPU and hardware virtualization properties of an x86 machine.
-        :param machine: IMachine object to read.
-        :return: Dictionary with the properties, empty for machines of another architecture.
-        """
-        x86 = cls._resolve(machine, 'platform.x86')
-        if x86 is None:
-            return {}
-
-        parameters = {}
-        for enum_type, getter, prefix in (
-            ('CPUPropertyTypeX86', x86.getCPUProperty, 'cpuProperty'),
-            ('HWVirtExPropertyType', x86.getHWVirtExProperty, 'hwVirtExProperty'),
-        ):
-            for name, value in cls._api.constants().all_values(enum_type).items():
-                if name == 'Null':
-                    continue
-                try:
-                    parameters[f'{prefix}.{name}'] = str(getter(value))
-                except Exception:  # pylint: disable=broad-except -- unsupported properties raise
-                    continue
-        return parameters
-
-    @classmethod
-    def _read_network_adapters(cls, machine) -> dict:
-        """
-        Read the settings of every network adapter under the showvminfo style nic<number> name.
-        :param machine: IMachine object to read.
-        :return: Dictionary with the adapter parameters.
-        """
-        try:
-            slots = machine.platform.properties.getMaxNetworkAdapters(machine.platform.chipsetType)
-        except Exception:  # pylint: disable=broad-except -- older API versions keep this elsewhere
-            slots = cls._MAX_NETWORK_ADAPTERS
-
-        parameters = {}
-        for slot in range(slots):
-            try:
-                adapter = machine.getNetworkAdapter(slot)
-            except Exception:  # pylint: disable=broad-except -- slots above the chipset limit raise
-                break
-
-            prefix = f'nic{slot + 1}.'
-            parameters.update(cls._read_object(adapter, prefix=prefix))
-            if adapter.attachmentType == cls._api.constants().NetworkAttachmentType_NAT:
-                parameters.update(cls._read_object(adapter.NATEngine, prefix=f'{prefix}NATEngine.'))
-                parameters[f'{prefix}NATEngine.Redirects'] = ';'.join(adapter.NATEngine.redirects)
-        return parameters
-
-    @classmethod
-    def _read_collections(cls, machine) -> dict:
-        """
-        Read the controllers, attached media and shared folders of the machine.
-        :param machine: IMachine object to read.
-        :return: Dictionary with an entry per item of the collections.
-        """
-        parameters = {}
-        for controller in machine.USBControllers:
-            parameters[f'usbController.{controller.name}'] = cls._enum_name('USBControllerType', controller.type)
-
-        for controller in machine.storageControllers:
-            parameters[f'storageController.{controller.name}'] = (
-                f"{cls._enum_name('StorageBus', controller.bus)}/"
-                f"{cls._enum_name('StorageControllerType', controller.controllerType)}"
-            )
-
-        for attachment in machine.mediumAttachments:
-            medium = attachment.medium
-            parameters[f'medium.{attachment.controller}.{attachment.port}.{attachment.device}'] = (
-                f"{cls._enum_name('DeviceType', attachment.type)}:{medium.location if medium is not None else ''}"
-            )
-
-        for folder in machine.sharedFolders:
-            parameters[f'sharedFolder.{folder.name}'] = folder.hostPath
-        return parameters
-
-    @classmethod
-    def _resolve(cls, machine, path: str):
-        """
-        Follow a dotted path of API properties, e.g. audioSettings.adapter.
-        :param machine: IMachine object to start from.
-        :param path: Dotted path to the nested object.
-        :return: API object or None if it is not available for this machine.
-        """
-        obj = machine
-        for name in path.split('.'):
-            try:
-                obj = getattr(obj, name)
-            except Exception:  # pylint: disable=broad-except -- e.g. x86 raises on ARM machines
-                return None
-        return obj
-
-    @classmethod
-    def _enum_name(cls, enum_type: str, value: int) -> str:
-        """
-        Get the readable name of an enum value.
-        :param enum_type: Name of the enum type, e.g. MachineState.
-        :param value: Value of the enum.
-        :return: Name of the value, the value itself if it is unknown.
-        """
-        for name, enum_value in cls._api.constants().all_values(enum_type).items():
-            if enum_value == value:
-                return name
-        return str(value)
 
     def get_guest_properties(self) -> dict:
         """
@@ -400,27 +253,6 @@ class Info:
         properties = getattr(obj, '_prop_map_get_', None)
         names = properties.keys() if properties is not None else dir(obj)
         return sorted(name for name in names if not name.startswith('_') and 'InternalAndReserved' not in name)
-
-    @classmethod
-    def _as_text(cls, value, name: str = '', prefix: str = '') -> str:
-        """
-        Convert a property value to a string.
-        :param value: Value read from the API.
-        :param name: Name of the property, used to find its enum type.
-        :param prefix: Prefix of the parameter, used for names that repeat in several objects.
-        :return: String representation of the value, name or type for the nested API objects.
-        """
-        enum_type = cls._ENUM_TYPES.get(f'{prefix}{name}'.lower()) or cls._ENUM_TYPES.get(name.lower())
-        if enum_type is not None and isinstance(value, int):
-            return cls._enum_name(enum_type, value)
-        if isinstance(value, (tuple, list)):
-            return ','.join(cls._as_text(item) for item in value)
-        if value is None:
-            return ''
-        if isinstance(value, (str, int, float, bool)):
-            return str(value)
-        object_name = getattr(value, 'name', None)
-        return object_name if isinstance(object_name, str) else f'<{type(value).__name__}>'
 
     def get_guest_property(self, parameter: str) -> str:
         """

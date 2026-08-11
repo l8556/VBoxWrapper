@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from contextlib import contextmanager, nullcontext
-from os.path import abspath, basename, isfile
+from os import makedirs, sep, walk
+from os.path import abspath, basename, dirname, isdir, isfile, join, relpath
 from subprocess import CompletedProcess
 
 from rich import print
@@ -180,7 +181,10 @@ class FileUtils:
 
     def _copy(self, source: str, destination: str, to_guest: bool) -> CompletedProcess:
         """
-        Copy a file between the host and the guest.
+        Copy a file or directory between the host and the guest.
+
+        Directory copies are done file-by-file: Guest Additions directoryCopy* is unreliable
+        across platforms and often returns VBOX_E_IPRT_ERROR (0x80bb0005) for report trees.
         :param source: Path the file is read from.
         :param destination: Path the file is written to.
         :param to_guest: True to copy to the guest, False to copy from the guest.
@@ -191,10 +195,21 @@ class FileUtils:
         source, destination = (abspath(source), destination) if to_guest else (source, abspath(destination))
         command = f"copy {source} {'to' if to_guest else 'from'} the guest: {destination}"
 
-        if to_guest and not isfile(source):
-            return self._failed(command, f"|ERROR|{self.name}| File not found: {source}")
+        if to_guest and not (isfile(source) or isdir(source)):
+            return self._failed(command, f"|ERROR|{self.name}| Path not found: {source}")
 
         try:
+            if to_guest:
+                is_directory = isdir(source)
+            else:
+                is_directory = self._guest_path_is_directory(source)
+
+            if is_directory:
+                return self._copy_directory(source, destination, to_guest=to_guest)
+
+            if not to_guest:
+                makedirs(dirname(destination) or '.', exist_ok=True)
+
             with self._guest_session() as guest_session:
                 copy = guest_session.fileCopyToGuest if to_guest else guest_session.fileCopyFromGuest
                 progress = copy(source, destination, [constants.FileCopyFlag_None])
@@ -204,6 +219,157 @@ class FileUtils:
         except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
             return self._failed(command, f"|ERROR|{self.name}| Unable to copy {source}: {error}")
         return CompletedProcess(command, returncode=0, stdout='', stderr='')
+
+    def _copy_directory(self, source: str, destination: str, to_guest: bool) -> CompletedProcess:
+        """
+        Recursively copy directory contents between the host and the guest.
+        :param source: Source directory.
+        :param destination: Destination directory that receives the contents of source.
+        :param to_guest: True to copy to the guest, False to copy from the guest.
+        :return: CompletedProcess with the return code of the operation.
+        """
+        command = f"copy directory {source} {'to' if to_guest else 'from'} the guest: {destination}"
+        try:
+            entries = (
+                self._iter_host_files(source)
+                if to_guest
+                else self._iter_guest_files(source)
+            )
+            if not entries and not to_guest and not self._guest_path_is_directory(source):
+                return self._failed(command, f"|ERROR|{self.name}| Path not found: {source}")
+
+            if to_guest:
+                self.create_dir(destination)
+                for _, relative_path in entries:
+                    remote_parent = dirname(self._join_guest_path(destination, relative_path))
+                    if remote_parent and remote_parent.rstrip('/\\') != destination.rstrip('/\\'):
+                        self.create_dir(remote_parent)
+            else:
+                makedirs(destination, exist_ok=True)
+
+            constants = self._api.constants()
+            with self._guest_session() as guest_session:
+                for absolute_path, relative_path in entries:
+                    if to_guest:
+                        remote_path = self._join_guest_path(destination, relative_path)
+                        progress = guest_session.fileCopyToGuest(
+                            absolute_path, remote_path, [constants.FileCopyFlag_None]
+                        )
+                    else:
+                        local_path = join(destination, relative_path.replace('/', sep))
+                        makedirs(dirname(local_path) or destination, exist_ok=True)
+                        progress = guest_session.fileCopyFromGuest(
+                            absolute_path, local_path, [constants.FileCopyFlag_None]
+                        )
+                    self._api.wait_progress(
+                        progress, f"|ERROR|{self.name}| Unable to copy {absolute_path}"
+                    )
+        except VboxException as error:
+            return self._failed(command, str(error))
+        except Exception as error:  # pylint: disable=broad-except -- COM and XPCOM raise their own types
+            return self._failed(command, f"|ERROR|{self.name}| Unable to copy {source}: {error}")
+        return CompletedProcess(command, returncode=0, stdout='', stderr='')
+
+    def _guest_path_is_directory(self, path: str) -> bool:
+        """
+        Check whether a path on the guest is a directory.
+        :param path: Path inside the guest.
+        :return: True if the path exists and is a directory.
+        """
+        if self._is_windows_guest():
+            result = self.run_cmd(
+                f"Test-Path -LiteralPath '{path}' -PathType Container",
+                shell='powershell',
+                stdout=False,
+                stderr=False,
+                status_bar=False,
+            )
+            return result.returncode == 0 and result.stdout.strip().lower() in {'true', '1'}
+
+        result = self.run_cmd(
+            f'test -d "{path}"',
+            stdout=False,
+            stderr=False,
+            status_bar=False,
+        )
+        return result.returncode == 0
+
+    def _iter_guest_files(self, root: str) -> list:
+        """
+        List files under a guest directory.
+        :param root: Guest directory to walk.
+        :return: List of (absolute_path, path_relative_to_root) tuples.
+        """
+        if self._is_windows_guest():
+            command = (
+                f"Get-ChildItem -LiteralPath '{root}' -Recurse -File | "
+                f"ForEach-Object {{ $_.FullName }}"
+            )
+            result = self.run_cmd(
+                command, shell='powershell', stdout=False, stderr=False, status_bar=False
+            )
+            separator = '\\'
+        else:
+            result = self.run_cmd(
+                f'find "{root}" -type f -print',
+                stdout=False,
+                stderr=False,
+                status_bar=False,
+            )
+            separator = '/'
+
+        if result.returncode != 0:
+            raise VboxException(f"|ERROR|{self.name}| Unable to list files in {root}: {result.stderr}")
+
+        root_prefix = root.rstrip('/\\') + separator
+        entries = []
+        for line in result.stdout.splitlines():
+            absolute_path = line.strip()
+            if not absolute_path:
+                continue
+            if absolute_path.startswith(root_prefix):
+                relative_path = absolute_path[len(root_prefix):]
+            elif absolute_path.rstrip('/\\') == root.rstrip('/\\'):
+                continue
+            else:
+                relative_path = basename(absolute_path)
+            entries.append((absolute_path, relative_path))
+        return entries
+
+    @staticmethod
+    def _iter_host_files(root: str) -> list:
+        """
+        List files under a host directory.
+        :param root: Host directory to walk.
+        :return: List of (absolute_path, path_relative_to_root) tuples.
+        """
+        entries = []
+        for dirpath, _, filenames in walk(root):
+            for filename in filenames:
+                absolute_path = join(dirpath, filename)
+                relative_path = relpath(absolute_path, root)
+                entries.append((absolute_path, relative_path))
+        return entries
+
+    def _is_windows_guest(self) -> bool:
+        """
+        Check whether the guest OS is Windows.
+        :return: True if the guest is Windows.
+        """
+        os_type = (self.os_type or self.vm.get_os_type() or '').lower()
+        return 'windows' in os_type
+
+    @staticmethod
+    def _join_guest_path(root: str, relative_path: str) -> str:
+        """
+        Join a guest directory with a relative path using the guest separator.
+        :param root: Guest directory.
+        :param relative_path: Relative path using host separators.
+        :return: Absolute guest path.
+        """
+        separator = '\\' if '\\' in root else '/'
+        normalized = relative_path.replace('\\', '/').replace('/', separator)
+        return root.rstrip('/\\') + separator + normalized
 
     def _write_stdin(self, process, data: str) -> None:
         """

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from collections import deque
 from contextlib import contextmanager, nullcontext
 from os import makedirs, sep, walk
 from os.path import abspath, basename, dirname, isdir, isfile, join, relpath
@@ -8,6 +9,7 @@ from uuid import uuid4
 
 from rich import print
 from rich.console import Console
+from rich.text import Text
 
 from ..api import VboxApi
 from ..VMExceptions import VboxException
@@ -32,6 +34,9 @@ class FileUtils:
     _STDIN_HANDLE = 0
     _STDOUT_HANDLE = 1
     _STDERR_HANDLE = 2
+    # The output of a guest is plain text: markup of rich must not be read out of a log line, and
+    # the highlighter and the line wrapping only cost time on a long log.
+    _OUTPUT_CONSOLE = Console(soft_wrap=True, markup=False, highlight=False)
     # Executable and arguments of the shells the commands can be executed with.
     # Linux uses a login shell (-l) so PATH and other profile settings of the user are loaded;
     # guestcontrol alone does not apply the Linux user profile the way it does on Windows.
@@ -519,35 +524,73 @@ class FileUtils:
         :return: Tuple with the collected standard output and standard error.
         """
         constants = self._api.constants()
-        _stdout, _stderr = '', ''
+        out_chunks, err_chunks = [], []
+        # A command producing megabytes of log is read in tens of thousands of chunks, so the
+        # chunks are joined once at the end instead of growing a single string, and the status bar
+        # is fed from the last lines only instead of from the whole collected output.
+        recent_lines = deque(maxlen=max(max_stdout_lines, 1))
+        unfinished_line = ''
 
         with Console().status(f'[cyan]Exec command:{command}') if status_bar else nullcontext() as status:
             while True:
-                # Reading blocks for the timeout, so the loop follows the pace of the output.
                 out_chunk = self._read_stream(process, self._STDOUT_HANDLE) if wait_stdout else ''
                 err_chunk = self._read_stream(process, self._STDERR_HANDLE) if wait_stdout else ''
 
                 if out_chunk:
-                    _stdout += out_chunk
+                    out_chunks.append(out_chunk)
                     if stdout:
                         if status_bar:
-                            status.update(f"[cyan]{self._tail(_stdout, max_stdout_lines)}")
+                            unfinished_line = self._collect_lines(
+                                recent_lines, unfinished_line, out_chunk
+                            )
+                            status.update(
+                                Text(self._recent_output(recent_lines, unfinished_line), style='cyan')
+                            )
                         else:
-                            print(out_chunk, end='')
+                            self._OUTPUT_CONSOLE.print(out_chunk, end='')
 
                 if err_chunk:
-                    _stderr += err_chunk
+                    err_chunks.append(err_chunk)
                     if stderr:
-                        print(f"[red]{err_chunk}", end='')
+                        self._OUTPUT_CONSOLE.print(err_chunk, end='', style='red')
 
                 if out_chunk or err_chunk:
                     continue
 
                 if process.status not in self._running_statuses():
                     break
-                if not wait_stdout:
-                    process.waitFor(constants.ProcessWaitForFlag_Terminate, self._READ_TIMEOUT)
-        return _stdout, _stderr
+                # Reading returns at once when the guest has nothing to give, so without this wait
+                # the loop spins thousands of times a second and burns a core of the host for the
+                # whole run of the command.
+                process.waitFor(constants.ProcessWaitForFlag_Terminate, self._READ_TIMEOUT)
+        return ''.join(out_chunks), ''.join(err_chunks)
+
+    @staticmethod
+    def _collect_lines(recent_lines: deque, unfinished_line: str, chunk: str) -> str:
+        """
+        Move the complete lines of a chunk of output into the queue of the recent lines.
+        :param recent_lines: Queue keeping the last lines, older ones fall out of it.
+        :param unfinished_line: Part of a line left over from the previous chunk.
+        :param chunk: Output read from the guest.
+        :return: Part of a line the next chunk continues.
+        """
+        lines = (unfinished_line + chunk).split('\n')
+        # Whatever follows the last newline is not a line yet, it is empty when the chunk ended
+        # with a newline.
+        rest = lines.pop()
+        recent_lines.extend(line.rstrip('\r') for line in lines)
+        return rest
+
+    @staticmethod
+    def _recent_output(recent_lines: deque, unfinished_line: str) -> str:
+        """
+        Build the last lines of the output the status bar shows.
+        :param recent_lines: Queue keeping the last complete lines.
+        :param unfinished_line: Line the guest has not finished writing.
+        :return: Last lines of the output.
+        """
+        lines = [*recent_lines, unfinished_line] if unfinished_line else list(recent_lines)
+        return '\n'.join(lines[-recent_lines.maxlen:])
 
     def _read_stream(self, process, handle: int) -> str:
         """
@@ -651,13 +694,3 @@ class FileUtils:
         """
         print(f"[red]{message}")
         return CompletedProcess(command, returncode=1, stdout='', stderr=message)
-
-    @staticmethod
-    def _tail(text: str, max_lines: int) -> str:
-        """
-        Keep only the last lines of the collected output.
-        :param text: Output collected so far.
-        :param max_lines: Number of lines to keep.
-        :return: Last lines of the output.
-        """
-        return '\n'.join(text.splitlines()[-max_lines:])

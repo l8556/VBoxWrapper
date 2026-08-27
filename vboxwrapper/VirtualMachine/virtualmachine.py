@@ -69,10 +69,19 @@ class VirtualMachine:
         Shutdown the virtual machine.
         :return: None
         """
-        if self.power_status() is False:
-            return print(f"[red]|ERROR|{self.name}| VirtualMachine already is powered off.")
+        state = self.machine.state
+        if not self._api.is_online(state):
+            return print(
+                f"[red]|ERROR|{self.name}| VirtualMachine already is powered off "
+                f"(state: {self._api.state_name(state)})."
+            )
         with self._api.shared_session(self.machine) as session:
-            session.console.powerButton()
+            console = session.console
+            if console is None:
+                return print(
+                    f"[yellow]|WARNING|{self.name}| No console in session; skip powerButton"
+                )
+            console.powerButton()
 
     def wait_until_shutdown(self, timeout: int = 120, interval: int = 1) -> bool:
         """
@@ -219,10 +228,40 @@ class VirtualMachine:
         has shut down completely before returning. If False, it returns immediately after sending the poweroff command.
         :return: None
         """
+        state = self.machine.state
+        # power_status() is only True for Running; use is_online for Paused/Starting/etc.
+        if not self._api.is_online(state):
+            print(
+                f"[green]|INFO|{self.name}| VirtualMachine already is powered off "
+                f"(state: {self._api.state_name(state)})"
+            )
+            if wait_until_shutdown:
+                self.wait_until_shutdown()
+            return
+
         print(f"[green]|INFO|{self.name}| Shutting down the virtual machine")
-        with self._api.shared_session(self.machine) as session:
-            progress = session.console.powerDown()
-            self._api.wait_progress(progress, f"[red]|ERROR|{self.name}| Unable to power off the virtual machine")
+        try:
+            with self._api.shared_session(self.machine) as session:
+                console = session.console
+                if console is None:
+                    # Unlocked / transitional state — no IConsole to call powerDown on.
+                    print(
+                        f"[yellow]|WARNING|{self.name}| No console on session "
+                        f"(state: {self._api.state_name(self.machine.state)}); skip powerDown"
+                    )
+                else:
+                    progress = console.powerDown()
+                    self._api.wait_progress(
+                        progress,
+                        f"[red]|ERROR|{self.name}| Unable to power off the virtual machine",
+                    )
+        except Exception as error:  # pylint: disable=broad-except -- COM raises its own types
+            if not self._api.is_online(self.machine.state):
+                print(f"[green]|INFO|{self.name}| VirtualMachine already is powered off.")
+            else:
+                raise VirtualMachinException(
+                    f"[red]|ERROR|{self.name}| Unable to power off the virtual machine: {error}"
+                ) from error
 
         if wait_until_shutdown:
             self.wait_until_shutdown()

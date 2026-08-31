@@ -271,6 +271,10 @@ class FileUtils:
                 'not able to logon',
                 'unable to log in',
                 'guest additions',
+                # A user is logged in a while before the guest control service of VBoxService
+                # accepts processes, so the first operations after a boot report it is not ready.
+                'not ready',
+                'verr_not_ready',
             )
         )
 

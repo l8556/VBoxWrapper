@@ -94,11 +94,16 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "rich" },
+]
+
+[package.optional-dependencies]
+api = [
     { name = "vboxapi" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "rich", specifier = ">=15.0.0" },
-    { name = "vboxapi", directory = "vendor/vboxapi" },
+    { name = "vboxapi", marker = "extra == 'api'", directory = "vendor/vboxapi" },
 ]
+provides-extras = ["api"]

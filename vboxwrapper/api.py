@@ -4,11 +4,12 @@ import atexit
 import threading
 import warnings
 from contextlib import contextmanager
-from typing import Optional
-
-from vboxapi import VirtualBoxManager
+from typing import TYPE_CHECKING, Optional
 
 from .VMExceptions import VboxException
+
+if TYPE_CHECKING:
+    from vboxapi import VirtualBoxManager
 
 
 class VboxApi:
@@ -29,7 +30,7 @@ class VboxApi:
     __local = threading.local()
 
     @classmethod
-    def manager(cls) -> VirtualBoxManager:
+    def manager(cls) -> "VirtualBoxManager":
         """
         Get the shared VirtualBox manager, creating it on first use and attaching the calling
         thread to it.
@@ -42,7 +43,7 @@ class VboxApi:
             if cls.__manager is None:
                 cls.__warn_outside_main_thread()
                 # The thread creating the manager is attached by the API itself.
-                cls.__manager = VirtualBoxManager()
+                cls.__manager = cls.__new_manager()
                 cls.__owner_thread = threading.get_ident()
                 if not cls.__at_exit_registered:
                     atexit.register(cls.deinit)
@@ -52,6 +53,25 @@ class VboxApi:
 
         cls.__local.attached = True
         return cls.__manager
+
+    @classmethod
+    def __new_manager(cls) -> "VirtualBoxManager":
+        """
+        Create a VirtualBox manager from the SDK bindings.
+        The bindings are built from the SDK of the locally installed VirtualBox, so they are
+        imported on first use only and the package stays importable on a host without VirtualBox.
+        :return: New VirtualBox manager.
+        """
+        try:
+            from vboxapi import VirtualBoxManager
+        except ImportError as error:
+            raise VboxException(
+                "[red]|ERROR| The VirtualBox API bindings (vboxapi) are not installed. "
+                "Install VirtualBox and add the bindings with the 'api' extra of this package, "
+                "e.g. 'vboxwrapper[api]'."
+            ) from error
+
+        return VirtualBoxManager()
 
     @classmethod
     def __warn_outside_main_thread(cls) -> None:

@@ -23,8 +23,12 @@ classifiers=[
 
 dependencies = [
     "rich>=15.0.0",
-    "vboxapi",
 ]
+
+# The bindings are built from the SDK of a locally installed VirtualBox, which is missing on hosts
+# that only import the package (CI, linters), so they are requested explicitly: vboxwrapper[api].
+[project.optional-dependencies]
+api = ["vboxapi"]
 
 [project.urls]
 Repository = "https://github.com/l8556/VBoxWrapper.git"

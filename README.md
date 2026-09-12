@@ -20,9 +20,11 @@ VBoxWrapper requires Python 3.7 or higher and VirtualBox to be installed
 on your system.
 
 The library talks to VirtualBox through its Python API, so the `vboxapi`
-bindings have to be available. They are not published on PyPI: with `uv` they
-are built automatically (see below), with `pip` install them from the SDK of
-the local VirtualBox installation.
+bindings have to be available to drive machines. They are not published on
+PyPI and are built from the SDK of the local VirtualBox installation, which is
+why they live in the optional `api` extra: the package itself can be imported
+without VirtualBox, and every call reaching the API fails with a readable error
+when the bindings are missing.
 
 ### Using pip
 
@@ -42,16 +44,17 @@ pip install .
 ### Development environment with uv
 
 ```bash
-uv sync
+uv sync --extra api
 ```
 
-`uv sync` also builds and installs `vboxapi`, the VirtualBox Python bindings.
+The `api` extra builds and installs `vboxapi`, the VirtualBox Python bindings.
 `vendor/vboxapi` builds them from the SDK of the VirtualBox installation
 found on the machine (or the one pointed to by `VBOX_MSI_INSTALL_PATH`
-or `VBOX_INSTALL_PATH`). After upgrading VirtualBox refresh the bindings:
+or `VBOX_INSTALL_PATH`), so a plain `uv sync` is enough on a machine without
+VirtualBox. After upgrading VirtualBox refresh the bindings:
 
 ```bash
-uv sync --reinstall-package vboxapi
+uv sync --extra api --reinstall-package vboxapi
 ```
 
 ## Quick Start
